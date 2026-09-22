@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registro de Pressão Arterial</title>
+<style>
+  :root{
+    --bg:#F4F6F5;
+    --panel:#FFFFFF;
+    --border:#DCE3E0;
+    --ink:#16211E;
+    --muted:#5B6764;
+    --teal:#1F6F63;
+    --teal-soft:#E4F0EC;
+    --slate:#3A5A78;
+    --gold:#B98A2E;
+    --radius:6px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  a{color:var(--teal);}
+  #login-screen{
+    max-width:380px; margin:8vh auto 0; padding:28px; background:var(--panel);
+    border:1px solid var(--border); border-radius:var(--radius);
+  }
+  #login-screen h1{font-family:Georgia,serif; font-size:22px; margin:0 0 4px;}
+  #login-screen p.sub{color:var(--muted); font-size:13px; margin:0 0 20px;}
+  #login-screen fieldset{border:1px solid var(--border); border-radius:4px; padding:10px 12px; margin:0 0 14px;}
+  #login-screen legend{font-size:12px; color:var(--muted); padding:0 4px;}
+  #login-screen label.radio{display:block; font-size:13.5px; margin-bottom:6px; font-weight:normal; cursor:pointer;}
+  header.app-header{padding:24px clamp(16px,4vw,48px) 16px; border-bottom:1px solid var(--border); background:var(--panel);}
+  header.app-header .top-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+  header.app-header h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif; font-weight:600; font-size:26px; margin:0 0 4px; color:var(--ink);}
+  header.app-header p{margin:0; color:var(--muted); font-size:13.5px;}
+  .session-info{font-size:12.5px; color:var(--muted); text-align:right; line-height:1.6;}
+  .session-info strong{color:var(--ink);}
+  .person-bar{padding:14px clamp(16px,4vw,48px); background:var(--panel); border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .person-bar select, .person-bar input{padding:7px 10px; border:1px solid var(--border); border-radius:4px; font-size:14px; font-family:inherit;}
+  nav.tabs{display:flex; gap:2px; padding:0 clamp(16px,4vw,48px); border-bottom:1px solid var(--border); background:var(--panel); overflow-x:auto;}
+  nav.tabs button{background:none; border:none; padding:14px 16px; font-size:14px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; font-family:inherit; white-space:nowrap;}
+  nav.tabs button.active{color:var(--teal); border-bottom-color:var(--teal); font-weight:600;}
+  main{padding:24px clamp(16px,4vw,48px) 72px; max-width:1080px; margin:0 auto;}
+  .panel{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); padding:20px; margin-bottom:18px;}
+  .panel h2{font-family:Georgia, serif; font-size:17px; margin:0 0 14px; font-weight:600;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;}
+  .field{display:flex; flex-direction:column; gap:4px;}
+  .field label{font-size:12px; color:var(--muted);}
+  .field input{padding:8px 10px; border:1px solid var(--border); border-radius:4px; font-size:14px; font-family:inherit; min-width:110px; background:#fff; color:var(--ink);}
+  .btn{background:var(--teal); color:#fff; border:none; padding:9px 18px; border-radius:4px; font-size:14px; cursor:pointer;}
+  .btn:hover{opacity:.9;}
+  .btn.secondary{background:transparent; color:var(--teal); border:1px solid var(--teal);}
+  .btn.small{padding:3px 10px; font-size:11.5px;}
+  .btn.full{width:100%;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{text-align:left; padding:8px 10px; border-bottom:1px solid var(--border);}
+  th{color:var(--muted); font-weight:600; font-size:11.5px;}
+  tbody tr:hover{background:var(--teal-soft);}
+  .avg-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px;}
+  .avg-card{border:1px solid var(--border); border-radius:4px; padding:12px;}
+  .avg-card .period{font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:600;}
+  .avg-card .metric-row{display:flex; justify-content:space-between; font-size:14px; margin-bottom:3px;}
+  .avg-card .metric-row span:first-child{color:var(--muted);}
+  .avg-card .n{font-size:11px; color:var(--muted); margin-top:8px;}
+  canvas{width:100%; height:220px; display:block;}
+  .bar-canvas{height:150px;}
+  .week-nav, .day-nav{display:flex; align-items:center; gap:12px; margin-bottom:16px; flex-wrap:wrap;}
+  .week-nav button, .day-nav button{background:#fff; border:1px solid var(--border); border-radius:4px; padding:6px 12px; cursor:pointer; font-size:13px; font-family:inherit;}
+  .week-nav .label, .day-nav .label{font-weight:600; font-size:14px;}
+  .badge{display:inline-block; padding:3px 10px; border-radius:12px; color:#fff; font-size:11.5px; font-weight:600; margin-top:2px;}
+  .actions button{background:none; border:none; color:var(--teal); cursor:pointer; font-size:12px; margin-right:10px; font-family:inherit;}
+  .actions button.danger{color:#B23A3A;}
+  .feedback-panel{border-left:3px solid var(--teal);}
+  .feedback-panel ul{margin:0; padding-left:18px;}
+  .feedback-panel li{margin-bottom:9px; line-height:1.55; font-size:14px;}
+  .disclaimer{font-size:12px; color:var(--muted); margin-top:12px; padding-top:12px; border-top:1px solid var(--border);}
+  .empty{color:var(--muted); font-size:13px; padding:14px 0;}
+  .bars-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .bars-grid p{font-size:12px; color:var(--muted); margin:0 0 4px;}
+  .error-msg{color:#B23A3A; font-size:13px; min-height:18px; margin:4px 0 0;}
+  .group-box{background:var(--teal-soft); border:1px solid var(--border); border-radius:4px; padding:14px; font-size:13.5px;}
+  .group-code{font-family:Georgia,serif; font-size:20px; letter-spacing:2px; font-weight:600; color:var(--teal);}
+  @media (max-width:640px){
+    .row{flex-direction:column; align-items:stretch;}
+    .bars-grid{grid-template-columns:1fr;}
+    header.app-header .top-row{flex-direction:column;}
+    .session-info{text-align:left;}
+  }
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <h1>Registro de pressão arterial</h1>
+  <p class="sub" id="login-subtitle">Entre com sua conta ou crie uma nova para começar a registrar.</p>
+  <div class="field" style="margin-bottom:10px;"><label>E-mail</label><input type="email" id="login-email" placeholder="voce@exemplo.com"></div>
+  <div class="field" style="margin-bottom:14px;"><label>Senha</label><input type="password" id="login-password"></div>
+
+  <fieldset id="signup-extra" style="display:none;">
+    <legend>Ao criar conta</legend>
+    <label class="radio"><input type="radio" name="join-mode" value="new" checked onchange="toggleJoinMode()"> Começar um espaço novo (você poderá convidar outras pessoas depois com um código)</label>
+    <label class="radio"><input type="radio" name="join-mode" value="join" onchange="toggleJoinMode()"> Entrar em um espaço existente, usando um código que alguém te passou</label>
+    <div class="field" id="join-code-field" style="display:none; margin-top:6px;">
+      <label>Código do espaço</label>
+      <input type="text" id="join-code" placeholder="ex: A1B2C3" style="text-transform:uppercase;">
+    </div>
+  </fieldset>
+
+  <button class="btn full" id="login-btn" onclick="doLogin()">Entrar</button>
+  <p class="error-msg" id="login-error"></p>
+  <p style="font-size:12.5px;color:var(--muted);margin-top:10px;text-align:center;">
+    <a href="#" onclick="toggleAuthMode();return false;" id="mode-toggle-link">Não tem conta? Criar conta</a>
+  </p>
+</div>
+
+<div id="app-screen" style="display:none;">
+  <header class="app-header">
+    <div class="top-row">
+      <div>
+        <h1>Registro de pressão arterial</h1>
+        <p>Acompanhamento horário de SIS, DIA e pulso — sincronizado entre todos que compartilham o mesmo espaço.</p>
+      </div>
+      <div class="session-info" id="session-info"></div>
+    </div>
+  </header>
+  <div class="person-bar" id="person-bar"></div>
+  <nav class="tabs" id="tabs"></nav>
+  <main id="main"></main>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* ======================================================================
+   CONFIGURACAO DO FIREBASE - troque pelos valores do SEU projeto.
+   Console: https://console.firebase.google.com
+   (Configuracoes do projeto > Geral > Seus apps > Web app > firebaseConfig)
+   ====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyA9y7pfDLMED_fHSHHnLNZNrWX0bHLebeg",
+  authDomain: "p-arte-wk.firebaseapp.com",
+  projectId: "p-arte-wk",
+  storageBucket: "p-arte-wk.firebasestorage.app",
+  messagingSenderId: "1051007736994",
+  appId: "G-BEYJGCXFK1"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------- Estado em memoria ---------- */
+let pessoas = [];
+let records = [];
+let selectedPessoaId = null;
+let currentGroupId = null;
+let authMode = 'login';
+let state = { tab:'registrar', dayOffset:0, weekOffset:0, editingId:null };
+let unsubscribePessoas = null, unsubscribeRegistros = null;
+
+/* ---------- Autenticacao ---------- */
+function toggleAuthMode(){
+  authMode = authMode==='login' ? 'signup' : 'login';
+  document.getElementById('signup-extra').style.display = authMode==='signup' ? 'block' : 'none';
+  document.getElementById('login-btn').textContent = authMode==='signup' ? 'Criar conta' : 'Entrar';
+  document.getElementById('login-btn').setAttribute('onclick', authMode==='signup' ? 'doSignup()' : 'doLogin()');
+  document.getElementById('mode-toggle-link').textContent = authMode==='signup' ? 'Já tem conta? Entrar' : 'Não tem conta? Criar conta';
+  document.getElementById('login-error').textContent = '';
+}
+function toggleJoinMode(){
+  const mode = document.querySelector('input[name="join-mode"]:checked').value;
+  document.getElementById('join-code-field').style.display = mode==='join' ? 'block' : 'none';
+}
+function generateGroupCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0;i<6;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+function traduzErroAuth(code){
+  const map = {
+    'auth/invalid-email':'e-mail invalido.',
+    'auth/user-not-found':'usuario nao encontrado.',
+    'auth/wrong-password':'senha incorreta.',
+    'auth/invalid-credential':'e-mail ou senha incorretos.',
+    'auth/too-many-requests':'muitas tentativas - aguarde um pouco.',
+    'auth/email-already-in-use':'este e-mail ja esta cadastrado - tente entrar em vez de criar conta.',
+    'auth/weak-password':'senha muito fraca (minimo 6 caracteres).'
+  };
+  return map[code] || code;
+}
+function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if(!email || !senha){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  auth.signInWithEmailAndPassword(email, senha).catch(err=>{
+    errEl.textContent = 'Nao foi possivel entrar: ' + traduzErroAuth(err.code);
+  });
+}
+async function doSignup(){
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if(!email || !senha){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  const joinMode = document.querySelector('input[name="join-mode"]:checked').value;
+  let groupId;
+  if(joinMode === 'join'){
+    const code = document.getElementById('join-code').value.trim().toUpperCase();
+    if(!code){ errEl.textContent = 'Informe o codigo do espaco.'; return; }
+    groupId = code;
+  } else {
+    groupId = generateGroupCode();
+  }
+  try{
+    const cred = await auth.createUserWithEmailAndPassword(email, senha);
+    await db.collection('users').doc(cred.user.uid).set({
+      email: email, groupId: groupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(err){
+    errEl.textContent = 'Nao foi possivel criar a conta: ' + traduzErroAuth(err.code);
+  }
+}
+function doLogout(){ auth.signOut(); }
+
+async function joinAnotherGroup(){
+  const code = prompt('Digite o codigo do espaco que deseja usar:');
+  if(!code) return;
+  const groupId = code.trim().toUpperCase();
+  await db.collection('users').doc(auth.currentUser.uid).set({
+    email: auth.currentUser.email, groupId: groupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  }, { merge:true });
+  currentGroupId = groupId;
+  if(unsubscribePessoas) unsubscribePessoas();
+  if(unsubscribeRegistros) unsubscribeRegistros();
+  pessoas = []; records = []; selectedPessoaId = null;
+  updateSessionInfo();
+  startListeners();
+}
+function copyGroupCode(){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(currentGroupId).then(function(){ alert('Codigo copiado: '+currentGroupId); });
+  } else {
+    prompt('Copie o codigo do espaco:', currentGroupId);
+  }
+}
+function updateSessionInfo(){
+  const user = auth.currentUser;
+  if(!user) return;
+  document.getElementById('session-info').innerHTML =
+    'Conectado como '+user.email+'<br>'+
+    'Espaco: <strong>'+currentGroupId+'</strong> '+
+    '<button class="btn secondary small" onclick="copyGroupCode()">Copiar codigo</button> '+
+    '<button class="btn secondary small" onclick="joinAnotherGroup()">Trocar espaco</button><br>'+
+    '<a href="#" onclick="doLogout();return false;">Sair</a>';
+}
+
+auth.onAuthStateChanged(async function(user){
+  if(user){
+    try{
+      const docSnap = await db.collection('users').doc(user.uid).get();
+      if(docSnap.exists && docSnap.data().groupId){
+        currentGroupId = docSnap.data().groupId;
+      } else {
+        currentGroupId = generateGroupCode();
+        await db.collection('users').doc(user.uid).set({
+          email:user.email, groupId:currentGroupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge:true });
+      }
+    }catch(err){
+      alert('Erro ao carregar espaco do usuario: '+err.message);
+      auth.signOut();
+      return;
+    }
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'block';
+    updateSessionInfo();
+    startListeners();
+  } else {
+    if(unsubscribePessoas) unsubscribePessoas();
+    if(unsubscribeRegistros) unsubscribeRegistros();
+    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null;
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'block';
+  }
+});
+
+/* ---------- Firestore: listeners em tempo real (por espaco/grupo) ---------- */
+function startListeners(){
+  unsubscribePessoas = db.collection('pessoas')
+    .where('groupId','==',currentGroupId).orderBy('nome')
+    .onSnapshot(function(snap){
+      pessoas = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); });
+      if(!selectedPessoaId && pessoas.length) selectedPessoaId = pessoas[0].id;
+      if(selectedPessoaId && !pessoas.find(function(p){ return p.id===selectedPessoaId; })) selectedPessoaId = pessoas[0] ? pessoas[0].id : null;
+      render();
+    }, function(err){ alert('Erro ao carregar pessoas: '+err.message); });
+
+  unsubscribeRegistros = db.collection('registros')
+    .where('groupId','==',currentGroupId)
+    .onSnapshot(function(snap){
+      records = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); });
+      render();
+    }, function(err){ alert('Erro ao carregar registros: '+err.message); });
+}
+
+/* ---------- Pessoas ---------- */
+async function addPessoaInline(){
+  const input = document.getElementById('novo-nome-pessoa-inline');
+  const nome = input.value.trim();
+  if(!nome) return;
+  const ref = await db.collection('pessoas').add({ nome: nome, groupId: currentGroupId });
+  selectedPessoaId = ref.id;
+  input.value = '';
+}
+async function addPessoaPrimeira(){
+  const input = document.getElementById('novo-nome-pessoa');
+  const nome = input.value.trim();
+  if(!nome) return;
+  const ref = await db.collection('pessoas').add({ nome: nome, groupId: currentGroupId });
+  selectedPessoaId = ref.id;
+}
+async function removePessoa(id){
+  const p = pessoas.find(function(x){ return x.id===id; });
+  if(!p) return;
+  if(confirm('Remover "'+p.nome+'"? Os registros feitos para essa pessoa continuarao no banco, mas ficarao sem nome associado.')){
+    await db.collection('pessoas').doc(id).delete();
+  }
+}
+function selectPessoa(id){
+  selectedPessoaId = id;
+  state.editingId = null;
+  render();
+}
+
+/* ---------- Utilidades de data ---------- */
+function pad(n){ return n.toString().padStart(2,'0'); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function nowTimeStr(){ const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function parseDate(s){ const p=s.split('-').map(Number); return new Date(p[0],p[1]-1,p[2]); }
+function toDateStr(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function formatDateBR(s){ const p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
+function addDays(dateObj,n){ const d=new Date(dateObj); d.setDate(d.getDate()+n); return d; }
+function getMonday(dateObj){ const d=new Date(dateObj); const day=d.getDay(); const diff=(day===0?-6:1-day); d.setDate(d.getDate()+diff); return d; }
+
+/* ---------- Classificacao clinica (referencia ACC/AHA) ---------- */
+function classifyBP(sis, dia){
+  if(sis==null || dia==null) return { label:'-', color:'#8B8D8A', level:0 };
+  if(sis>=180 || dia>=120) return { label:'Crise hipertensiva', color:'#7A1F1F', level:5 };
+  if(sis>=140 || dia>=90) return { label:'Hipertensao estagio 2', color:'#B23A3A', level:4 };
+  if(sis>=130 || dia>=80) return { label:'Hipertensao estagio 1', color:'#C1652B', level:3 };
+  if(sis>=120 && dia<80) return { label:'Pressao elevada', color:'#C98A2C', level:2 };
+  if(sis<120 && dia<80) return { label:'Normal', color:'#3F7D5C', level:1 };
+  return { label:'Indefinido', color:'#8B8D8A', level:0 };
+}
+const PERIOD_SHORT = { manha:'Manha', tarde:'Tarde', noite:'Noite', todos:'Todos' };
+function getPeriod(timeStr){
+  const parts = timeStr.split(':').map(Number);
+  const mins = parts[0]*60+parts[1];
+  if(mins>=5*60 && mins<12*60) return 'manha';
+  if(mins>=12*60 && mins<19*60) return 'tarde';
+  return 'noite';
+}
+
+/* ---------- Agregacoes ---------- */
+function computeAverages(recs, metric){
+  const groups = { manha:[], tarde:[], noite:[] };
+  recs.forEach(function(r){ groups[getPeriod(r.time)].push(r[metric]); });
+  const all = recs.map(function(r){ return r[metric]; });
+  const avg = function(arr){ return arr.length ? Math.round((arr.reduce(function(a,b){return a+b;},0)/arr.length)*10)/10 : null; };
+  return {
+    manha: avg(groups.manha), tarde: avg(groups.tarde), noite: avg(groups.noite), todos: avg(all),
+    counts: { manha:groups.manha.length, tarde:groups.tarde.length, noite:groups.noite.length, todos:all.length }
+  };
+}
+function buildAverages(recs){
+  return { sis: computeAverages(recs,'sis'), dia: computeAverages(recs,'dia'), pul: computeAverages(recs,'pul') };
+}
+function computeWeeklyTrend(scopedRecs, metric){
+  const map = {};
+  scopedRecs.forEach(function(r){
+    const mon = toDateStr(getMonday(parseDate(r.date)));
+    (map[mon] = map[mon] || []).push(r[metric]);
+  });
+  const weeks = Object.keys(map).sort();
+  const avgs = weeks.map(function(w){ const arr=map[w]; return Math.round((arr.reduce(function(a,b){return a+b;},0)/arr.length)*10)/10; });
+  return { weeks: weeks, avgs: avgs };
+}
+function trendDirection(avgs){
+  if(avgs.length<2) return 'estavel';
+  const half = Math.max(1, Math.floor(avgs.length/2));
+  const a = avgs.slice(0,half).reduce(function(x,y){return x+y;},0)/half;
+  const b = avgs.slice(-half).reduce(function(x,y){return x+y;},0)/half;
+  const diff = b-a;
+  if(diff>=3) return 'subindo';
+  if(diff<=-3) return 'descendo';
+  return 'estavel';
+}
+
+/* ---------- Observacao clinica (motor de regras local) ---------- */
+function generateFeedback(avgs, scopedRecs, isTotal){
+  const lines = [];
+  const todos = { sis:avgs.sis.todos, dia:avgs.dia.todos, pul:avgs.pul.todos };
+  if(todos.sis==null) return ['Ainda nao ha registros suficientes neste periodo para gerar uma observacao.'];
+  const cat = classifyBP(todos.sis, todos.dia);
+  lines.push('Media '+(isTotal?'geral':'da semana')+': '+todos.sis+'/'+todos.dia+' mmHg, faixa correspondente a "'+cat.label+'" pelos criterios de classificacao de pressao arterial (ACC/AHA).');
+  const periods = ['manha','tarde','noite'].filter(function(p){ return avgs.sis[p]!=null; });
+  if(periods.length>=2){
+    const maxP = periods.reduce(function(a,b){ return avgs.sis[b]>avgs.sis[a]?b:a; });
+    const minP = periods.reduce(function(a,b){ return avgs.sis[b]<avgs.sis[a]?b:a; });
+    if(avgs.sis[maxP]-avgs.sis[minP] >= 8){
+      lines.push('A sistolica media e mais alta no periodo da '+PERIOD_SHORT[maxP].toLowerCase()+' ('+avgs.sis[maxP]+' mmHg) do que na '+PERIOD_SHORT[minP].toLowerCase()+' ('+avgs.sis[minP]+' mmHg) - vale mencionar essa variacao numa consulta.');
+    }
+  }
+  if(todos.pul!=null){
+    if(todos.pul<60) lines.push('O pulso medio ('+todos.pul+' bpm) esta abaixo da faixa usual de repouso (60-100 bpm).');
+    else if(todos.pul>100) lines.push('O pulso medio ('+todos.pul+' bpm) esta acima da faixa usual de repouso (60-100 bpm).');
+  }
+  if(isTotal){
+    const trend = computeWeeklyTrend(scopedRecs, 'sis');
+    if(trend.avgs.length>=2){
+      const dir = trendDirection(trend.avgs);
+      if(dir==='subindo') lines.push('A media semanal de SIS mostra tendencia de aumento ao longo do periodo registrado.');
+      else if(dir==='descendo') lines.push('A media semanal de SIS mostra tendencia de queda ao longo do periodo registrado.');
+      else lines.push('A media semanal de SIS tem se mantido relativamente estavel ao longo do periodo registrado.');
+    }
+  }
+  if(cat.level>=4) lines.push('Medias nesta faixa costumam indicar hipertensao em estagio mais avancado; considere procurar avaliacao medica em breve.');
+  return lines;
+}
+
+/* ---------- Graficos (canvas puro) ---------- */
+function setupCanvas(canvas){
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const h = rect.height || 220;
+  canvas.width = rect.width * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return { ctx: ctx, W: rect.width, H: h };
+}
+function drawLineChart(canvas, series, xlabels){
+  if(!canvas) return;
+  const setup = setupCanvas(canvas);
+  const ctx = setup.ctx, W = setup.W, H = setup.H;
+  ctx.clearRect(0,0,W,H);
+  const allVals = series.flatMap(function(s){ return s.data.filter(function(v){ return v!=null; }); });
+  const padding = { top:22, right:14, bottom:28, left:36 };
+  if(allVals.length===0){
+    ctx.fillStyle='#8B8D8A'; ctx.font='13px system-ui';
+    ctx.fillText('Sem dados suficientes', 12, H/2);
+    return;
+  }
+  const minY = Math.floor(Math.min.apply(null,allVals) - 5);
+  const maxY = Math.ceil(Math.max.apply(null,allVals) + 5);
+  const plotW = W - padding.left - padding.right;
+  const plotH = H - padding.top - padding.bottom;
+  const n = xlabels.length;
+  const xPos = function(i){ return padding.left + (n<=1 ? plotW/2 : plotW*i/(n-1)); };
+  const yPos = function(v){ return padding.top + plotH - ((v-minY)/(maxY-minY))*plotH; };
+
+  ctx.strokeStyle = '#E3E1DA'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#8B8D8A'; ctx.font = '11px system-ui';
+  for(let g=0; g<=4; g++){
+    const v = minY + (maxY-minY)*g/4;
+    const y = yPos(v);
+    ctx.beginPath(); ctx.moveTo(padding.left,y); ctx.lineTo(W-padding.right,y); ctx.stroke();
+    ctx.fillText(Math.round(v), 2, y+3);
+  }
+  const step = Math.max(1, Math.ceil(n/7));
+  ctx.textAlign = 'center';
+  xlabels.forEach(function(lab,i){ if(i % step === 0 || i===n-1) ctx.fillText(lab, xPos(i), H-8); });
+  ctx.textAlign = 'left';
+
+  series.forEach(function(s){
+    ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
+    let started = false;
+    s.data.forEach(function(v,i){
+      if(v==null){ started=false; return; }
+      const x=xPos(i), y=yPos(v);
+      if(!started){ ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = s.color;
+    s.data.forEach(function(v,i){ if(v==null) return; const x=xPos(i), y=yPos(v); ctx.beginPath(); ctx.arc(x,y,2.6,0,Math.PI*2); ctx.fill(); });
+  });
+
+  let lx = padding.left;
+  ctx.font = '12px system-ui';
+  series.forEach(function(s){
+    ctx.fillStyle = s.color; ctx.fillRect(lx, 4, 10, 10);
+    ctx.fillStyle = '#3A3D3B'; ctx.fillText(s.label, lx+14, 13);
+    lx += ctx.measureText(s.label).width + 32;
+  });
+}
+function drawBarChart(canvas, values, labels, color){
+  if(!canvas) return;
+  const setup = setupCanvas(canvas);
+  const ctx = setup.ctx, W = setup.W, H = setup.H;
+  ctx.clearRect(0,0,W,H);
+  const padding = { top:20, right:8, bottom:22, left:30 };
+  const present = values.filter(function(v){ return v!=null; });
+  if(present.length===0){
+    ctx.fillStyle='#8B8D8A'; ctx.font='12px system-ui';
+    ctx.fillText('Sem dados', 10, H/2);
+    return;
+  }
+  const maxV = Math.max.apply(null,present) * 1.2;
+  const plotW = W - padding.left - padding.right;
+  const plotH = H - padding.top - padding.bottom;
+  const n = values.length;
+
+  ctx.strokeStyle = '#E3E1DA'; ctx.fillStyle = '#8B8D8A'; ctx.font = '10.5px system-ui';
+  for(let g=0; g<=3; g++){
+    const v = maxV*g/3;
+    const y = padding.top + plotH - (v/maxV)*plotH;
+    ctx.beginPath(); ctx.moveTo(padding.left,y); ctx.lineTo(W-padding.right,y); ctx.stroke();
+    ctx.fillText(Math.round(v), 1, y+3);
+  }
+  const bw = plotW/n*0.5;
+  ctx.textAlign = 'center';
+  values.forEach(function(v,i){
+    const cx = padding.left + plotW*(i+0.5)/n;
+    ctx.fillStyle = '#3A3D3B';
+    ctx.fillText(labels[i], cx, H-6);
+    if(v==null) return;
+    const y = padding.top + plotH - (v/maxV)*plotH;
+    ctx.fillStyle = color;
+    ctx.fillRect(cx-bw/2, y, bw, plotH - (y-padding.top));
+    ctx.fillStyle = '#1C1E1F'; ctx.font = '11px system-ui';
+    ctx.fillText(v, cx, y-5);
+  });
+  ctx.textAlign = 'left';
+}
+function drawSeriesChart(id, recs){
+  const canvas = document.getElementById(id); if(!canvas) return;
+  const sorted = recs.slice().sort(function(a,b){ return (a.date+a.time).localeCompare(b.date+b.time); });
+  const labels = sorted.map(function(r){ return formatDateBR(r.date).slice(0,5)+' '+r.time; });
+  drawLineChart(canvas, [
+    { label:'SIS', color:'#1F6F63', data: sorted.map(function(r){return r.sis;}) },
+    { label:'DIA', color:'#3A5A78', data: sorted.map(function(r){return r.dia;}) },
+    { label:'Pulso', color:'#B98A2E', data: sorted.map(function(r){return r.pul;}) }
+  ], labels);
+}
+function drawPeriodBars(prefix, avgs){
+  drawBarChart(document.getElementById('bar-sis'+prefix), ['manha','tarde','noite','todos'].map(function(p){return avgs.sis[p];}), ['Manha','Tarde','Noite','Todos'], '#1F6F63');
+  drawBarChart(document.getElementById('bar-dia'+prefix), ['manha','tarde','noite','todos'].map(function(p){return avgs.dia[p];}), ['Manha','Tarde','Noite','Todos'], '#3A5A78');
+  drawBarChart(document.getElementById('bar-pul'+prefix), ['manha','tarde','noite','todos'].map(function(p){return avgs.pul[p];}), ['Manha','Tarde','Noite','Todos'], '#B98A2E');
+}
+
+/* ---------- Blocos de renderizacao comuns ---------- */
+function renderAvgGrid(avgs){
+  return '<div class="avg-grid">' + ['manha','tarde','noite','todos'].map(function(p){
+    const sis=avgs.sis[p], dia=avgs.dia[p], pul=avgs.pul[p], n=avgs.sis.counts[p];
+    const cat = classifyBP(sis,dia);
+    return '<div class="avg-card">'+
+      '<div class="period">'+PERIOD_SHORT[p]+(p==='todos'?' (geral do periodo)':'')+'</div>'+
+      '<div class="metric-row"><span>SIS</span><strong>'+(sis==null?'—':sis)+'</strong></div>'+
+      '<div class="metric-row"><span>DIA</span><strong>'+(dia==null?'—':dia)+'</strong></div>'+
+      '<div class="metric-row"><span>Pulso</span><strong>'+(pul==null?'—':pul)+'</strong></div>'+
+      (sis!=null ? '<span class="badge" style="background:'+cat.color+'">'+cat.label+'</span>' : '')+
+      '<div class="n">'+n+' registro'+(n===1?'':'s')+'</div>'+
+    '</div>';
+  }).join('') + '</div>';
+}
+function renderTable(recs){
+  if(!recs.length) return '<p class="empty">Nenhum registro neste periodo.</p>';
+  const sorted = recs.slice().sort(function(a,b){ return (b.date+b.time).localeCompare(a.date+a.time); });
+  return '<div style="overflow-x:auto"><table><thead><tr>'+
+    '<th>Data</th><th>Hora</th><th>Periodo</th><th>SIS</th><th>DIA</th><th>Pulso</th><th></th>'+
+  '</tr></thead><tbody>'+
+    sorted.map(function(r){
+      return '<tr>'+
+      '<td>'+formatDateBR(r.date)+'</td><td>'+r.time+'</td><td>'+PERIOD_SHORT[getPeriod(r.time)]+'</td>'+
+      '<td>'+r.sis+'</td><td>'+r.dia+'</td><td>'+r.pul+'</td>'+
+      '<td class="actions"><button onclick="editRecord(\''+r.id+'\')">Editar</button><button class="danger" onclick="deleteRecord(\''+r.id+'\')">Excluir</button></td>'+
+      '</tr>';
+    }).join('')+
+  '</tbody></table></div>';
+}
+function renderFeedback(avgs, scopedRecs, isTotal){
+  const lines = generateFeedback(avgs, scopedRecs, isTotal);
+  return '<ul>'+lines.map(function(l){ return '<li>'+l+'</li>'; }).join('')+'</ul>'+
+  '<p class="disclaimer">Esta observacao e gerada localmente por um conjunto de regras baseado em diretrizes gerais de classificacao de pressao arterial (ACC/AHA) - nao e enviada a nenhum servico de IA externo. Nao e um diagnostico; consulte um profissional de saude para interpretacao individual.</p>';
+}
+
+/* ---------- Barra de pessoas ---------- */
+function renderPersonBar(){
+  const bar = document.getElementById('person-bar');
+  if(!pessoas.length){
+    bar.innerHTML =
+      '<div class="group-box" style="width:100%;">'+
+        'Seu espaco compartilhado: <span class="group-code">'+currentGroupId+'</span><br>'+
+        'Passe esse codigo para quem voce quiser que compartilhe os dados com voce (ele(a) escolhe "Entrar em um espaco existente" ao criar a conta).'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;width:100%;">'+
+        '<span style="font-size:13px;color:var(--muted);">Nenhuma pessoa cadastrada ainda.</span>'+
+        '<input id="novo-nome-pessoa" placeholder="Nome da pessoa">'+
+        '<button class="btn" onclick="addPessoaPrimeira()">Cadastrar</button>'+
+      '</div>';
+    document.getElementById('tabs').innerHTML = '';
+    document.getElementById('main').innerHTML = '<div class="panel"><p class="empty">Cadastre a primeira pessoa acima para comecar a registrar medicoes.</p></div>';
+    return false;
+  }
+  const options = pessoas.map(function(p){
+    return '<option value="'+p.id+'" '+(p.id===selectedPessoaId?'selected':'')+'>'+p.nome+'</option>';
+  }).join('');
+  bar.innerHTML =
+    '<label style="font-size:12px;color:var(--muted);">Pessoa</label>'+
+    '<select id="pessoa-select" onchange="selectPessoa(this.value)">'+options+'</select>'+
+    '<input id="novo-nome-pessoa-inline" placeholder="Nova pessoa">'+
+    '<button class="btn secondary" onclick="addPessoaInline()">+ Adicionar</button>'+
+    '<button class="btn secondary" style="border-color:#B23A3A;color:#B23A3A;" onclick="removePessoa(selectedPessoaId)">Remover pessoa atual</button>';
+  return true;
+}
+
+/* ---------- Abas ---------- */
+function render(){
+  const ok = renderPersonBar();
+  if(!ok) return;
+  document.getElementById('tabs').innerHTML = ['registrar','semanal','total'].map(function(t){
+    const names = { registrar:'Registrar / Dia', semanal:'Semanal', total:'Total' };
+    return '<button class="'+(state.tab===t?'active':'')+'" onclick="switchTab(\''+t+'\')">'+names[t]+'</button>';
+  }).join('');
+  const scoped = records.filter(function(r){ return r.pessoaId===selectedPessoaId; });
+  if(state.tab==='registrar') renderRegistrar(scoped);
+  else if(state.tab==='semanal') renderSemanal(scoped);
+  else renderTotal(scoped);
+}
+function switchTab(t){ state.tab=t; if(t!=='registrar') state.editingId=null; render(); window.scrollTo(0,0); }
+
+function renderRegistrar(scoped){
+  const editing = state.editingId ? scoped.find(function(r){ return r.id===state.editingId; }) : null;
+  const dayDate = addDays(new Date(), state.dayOffset);
+  const dayStr = toDateStr(dayDate);
+  const dayRecs = scoped.filter(function(r){ return r.date===dayStr; });
+  const avgs = buildAverages(dayRecs);
+  document.getElementById('main').innerHTML =
+    '<div class="panel">'+
+      '<h2>'+(editing ? 'Editar registro' : 'Novo registro')+'</h2>'+
+      '<div class="row">'+
+        '<div class="field"><label>Data</label><input type="date" id="f-date" value="'+(editing ? editing.date : todayStr())+'"></div>'+
+        '<div class="field"><label>Hora</label><input type="time" id="f-time" value="'+(editing ? editing.time : nowTimeStr())+'"></div>'+
+        '<div class="field"><label>SIS (mmHg)</label><input type="number" id="f-sis" value="'+(editing ? editing.sis : '')+'" placeholder="ex: 120"></div>'+
+        '<div class="field"><label>DIA (mmHg)</label><input type="number" id="f-dia" value="'+(editing ? editing.dia : '')+'" placeholder="ex: 80"></div>'+
+        '<div class="field"><label>Pulso (bpm)</label><input type="number" id="f-pul" value="'+(editing ? editing.pul : '')+'" placeholder="ex: 70"></div>'+
+        '<button class="btn" onclick="saveRecord()">'+(editing ? 'Salvar alteracoes' : 'Salvar registro')+'</button>'+
+        (editing ? '<button class="btn secondary" onclick="cancelEdit()">Cancelar</button>' : '')+
+      '</div>'+
+      '<p style="font-size:12px;color:var(--muted);margin:12px 0 0;">A data e a hora vem preenchidas com o momento atual - ajuste-as se estiver registrando uma medicao com atraso.</p>'+
+    '</div>'+
+    '<div class="panel">'+
+      '<div class="day-nav">'+
+        '<button onclick="changeDay(-1)">‹ Dia anterior</button>'+
+        '<span class="label">'+formatDateBR(dayStr)+(dayStr===todayStr() ? ' (hoje)' : '')+'</span>'+
+        '<button onclick="changeDay(1)">Dia seguinte ›</button>'+
+        (state.dayOffset!==0 ? '<button onclick="goToday()">Ir para hoje</button>' : '')+
+      '</div>'+
+      '<h2>Medias do dia</h2>'+
+      renderAvgGrid(avgs)+
+      '<canvas id="chart-day"></canvas>'+
+    '</div>'+
+    '<div class="panel">'+
+      '<h2>Registros do dia</h2>'+
+      renderTable(dayRecs)+
+    '</div>';
+  drawSeriesChart('chart-day', dayRecs);
+}
+
+function renderSemanal(scoped){
+  const monday = getMonday(addDays(new Date(), state.weekOffset*7));
+  const sunday = addDays(monday,6);
+  const weekRecs = scoped.filter(function(r){ const d=parseDate(r.date); return d>=monday && d<=sunday; });
+  const avgs = buildAverages(weekRecs);
+  document.getElementById('main').innerHTML =
+    '<div class="panel">'+
+      '<div class="week-nav">'+
+        '<button onclick="changeWeek(-1)">‹ Semana anterior</button>'+
+        '<span class="label">'+formatDateBR(toDateStr(monday))+' a '+formatDateBR(toDateStr(sunday))+'</span>'+
+        '<button onclick="changeWeek(1)">Proxima semana ›</button>'+
+        (state.weekOffset!==0 ? '<button onclick="goThisWeek()">Semana atual</button>' : '')+
+      '</div>'+
+      '<h2>Medias da semana</h2>'+
+      renderAvgGrid(avgs)+
+    '</div>'+
+    '<div class="panel"><h2>Evolucao na semana</h2><canvas id="chart-week-line"></canvas></div>'+
+    '<div class="panel"><h2>Comparativo por periodo</h2>'+
+      '<div class="bars-grid">'+
+        '<div><p>SIS</p><canvas class="bar-canvas" id="bar-sis-w"></canvas></div>'+
+        '<div><p>DIA</p><canvas class="bar-canvas" id="bar-dia-w"></canvas></div>'+
+        '<div><p>Pulso</p><canvas class="bar-canvas" id="bar-pul-w"></canvas></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel feedback-panel"><h2>Observacao clinica automatica</h2>'+renderFeedback(avgs, weekRecs, false)+'</div>'+
+    '<div class="panel"><h2>Registros da semana</h2>'+renderTable(weekRecs)+'</div>';
+  drawSeriesChart('chart-week-line', weekRecs);
+  drawPeriodBars('-w', avgs);
+}
+
+function renderTotal(scoped){
+  const avgs = buildAverages(scoped);
+  const trend = computeWeeklyTrend(scoped, 'sis');
+  document.getElementById('main').innerHTML =
+    '<div class="panel"><h2>Medias gerais (todos os registros desta pessoa)</h2>'+renderAvgGrid(avgs)+'</div>'+
+    '<div class="panel"><h2>Evolucao historica</h2><canvas id="chart-total-line"></canvas></div>'+
+    '<div class="panel"><h2>Tendencia semanal - SIS medio</h2><canvas id="chart-trend"></canvas></div>'+
+    '<div class="panel"><h2>Comparativo por periodo</h2>'+
+      '<div class="bars-grid">'+
+        '<div><p>SIS</p><canvas class="bar-canvas" id="bar-sis-t"></canvas></div>'+
+        '<div><p>DIA</p><canvas class="bar-canvas" id="bar-dia-t"></canvas></div>'+
+        '<div><p>Pulso</p><canvas class="bar-canvas" id="bar-pul-t"></canvas></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel feedback-panel"><h2>Observacao clinica automatica</h2>'+renderFeedback(avgs, scoped, true)+'</div>'+
+    '<div class="panel"><h2>Dados e backup</h2>'+
+      '<div class="row">'+
+        '<button class="btn secondary" onclick="exportData()">Exportar backup (JSON, deste espaco)</button>'+
+        '<div class="field"><label>Importar backup</label><input type="file" accept="application/json" onchange="importData(this)"></div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel"><h2>Todos os registros desta pessoa ('+scoped.length+')</h2>'+renderTable(scoped)+'</div>';
+  drawSeriesChart('chart-total-line', scoped);
+  drawLineChart(document.getElementById('chart-trend'),
+    [{ label:'SIS medio semanal', color:'#1F6F63', data: trend.avgs }],
+    trend.weeks.map(function(w){ return formatDateBR(w); })
+  );
+  drawPeriodBars('-t', avgs);
+}
+
+/* ---------- CRUD de registros (Firestore) ---------- */
+async function saveRecord(){
+  if(!selectedPessoaId){ alert('Cadastre/selecione uma pessoa primeiro.'); return; }
+  const date = document.getElementById('f-date').value;
+  const time = document.getElementById('f-time').value;
+  const sis = parseFloat(document.getElementById('f-sis').value);
+  const dia = parseFloat(document.getElementById('f-dia').value);
+  const pul = parseFloat(document.getElementById('f-pul').value);
+  if(!date || !time || isNaN(sis) || isNaN(dia) || isNaN(pul)){
+    alert('Preencha data, hora, SIS, DIA e pulso.');
+    return;
+  }
+  const data = {
+    pessoaId: selectedPessoaId, groupId: currentGroupId, date: date, time: time, sis: sis, dia: dia, pul: pul,
+    criadoPor: auth.currentUser ? auth.currentUser.email : null,
+    atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  if(state.editingId){
+    await db.collection('registros').doc(state.editingId).update(data);
+    state.editingId = null;
+  } else {
+    data.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
+    await db.collection('registros').add(data);
+  }
+}
+function editRecord(id){ state.editingId = id; state.tab = 'registrar'; render(); window.scrollTo(0,0); }
+function cancelEdit(){ state.editingId = null; render(); }
+async function deleteRecord(id){
+  if(confirm('Excluir este registro?')){
+    await db.collection('registros').doc(id).delete();
+  }
+}
+function changeDay(delta){ state.dayOffset += delta; render(); }
+function goToday(){ state.dayOffset = 0; render(); }
+function changeWeek(delta){ state.weekOffset += delta; render(); }
+function goThisWeek(){ state.weekOffset = 0; render(); }
+
+/* ---------- Backup / importacao ---------- */
+function exportData(){
+  const blob = new Blob([JSON.stringify({ pessoas: pessoas, registros: records }, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'pressao_arterial_backup_'+todayStr()+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+async function importData(input){
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e){
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.pessoas || !data.registros) throw new Error('formato invalido (esperado {pessoas, registros})');
+      if(!confirm('Importar '+data.pessoas.length+' pessoa(s) e '+data.registros.length+' registro(s)? Isso adiciona ao espaco atual (nao apaga o que ja existe).')) return;
+      const idMap = {};
+      for(const p of data.pessoas){
+        const ref = await db.collection('pessoas').add({ nome: p.nome, groupId: currentGroupId });
+        idMap[p.id] = ref.id;
+      }
+      const batch = db.batch();
+      data.registros.forEach(function(r){
+        const ref = db.collection('registros').doc();
+        batch.set(ref, {
+          pessoaId: idMap[r.pessoaId] || r.pessoaId, groupId: currentGroupId,
+          date:r.date, time:r.time, sis:r.sis, dia:r.dia, pul:r.pul,
+          criadoPor: auth.currentUser ? auth.currentUser.email : null,
+          criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      });
+      await batch.commit();
+      alert('Importacao concluida.');
+    }catch(err){ alert('Erro ao importar arquivo: '+err.message); }
+  };
+  reader.readAsText(file);
+}
+</script>
+</body>
+</html>
