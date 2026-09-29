@@ -9,7 +9,7 @@ A local, self-hosted web app for logging hourly blood pressure readings (systoli
 - **Daily view**: averages for morning (05:00–11:59), afternoon (12:00–18:59), night (19:00–04:59), and the full day, plus a chart and a record table. Day-by-day navigation.
 - **Weekly view**: same period breakdown, aggregated across the whole week, with navigation between weeks, a line chart, and bar charts comparing periods.
 - **Total view**: same breakdown across every record ever logged for the selected person, plus a week-over-week trend chart for systolic pressure.
-- **Automatic clinical observation**: a local, rule-based summary (no external AI service, no data leaves the browser except to your own Firestore database) using general ACC/AHA blood pressure classification thresholds. This is informational only — not a diagnosis.
+- **Automatic observation**: a local, rule-based summary (no external AI service, no data leaves the browser except to your own Firestore database) using user-configured reference values (120/80 mmHg, pulse 60–100 bpm) rather than a fixed clinical table. Flags low readings, out-of-range individual readings (not just averages), pulse pressure, variability, and small sample sizes. This is informational only — not a diagnosis.
 - **Shared "spaces"**: anyone can create an account. New accounts get a private, randomly generated space code; sharing that code lets someone else join the same space during sign-up, so specific people (e.g. family members) see the same shared data, while unrelated users stay fully isolated.
 - **Backup/restore**: export all data for the current space as JSON, and re-import it later.
 
@@ -64,4 +64,4 @@ This app needs a free [Firebase](https://console.firebase.google.com) project to
 
 ## Disclaimer
 
-The clinical observation feature classifies readings against general public guidelines (ACC/AHA) and highlights patterns (e.g. time-of-day differences, weekly trends). It is not a medical diagnosis and does not replace professional care — consult a doctor for interpretation of your own readings.
+The observation feature classifies readings against user-configured reference values (120/80 mmHg, pulse 60–100 bpm) and highlights patterns (time-of-day differences, weekly trends, individual out-of-range readings, low pulse pressure, high variability). It is not a medical diagnosis and does not replace professional care — reported symptoms (dizziness, faintness, weakness) always matter more than a numeric classification; seek medical attention when they occur, regardless of what the table shows.

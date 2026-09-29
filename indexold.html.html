@@ -142,12 +142,12 @@
    (Configuracoes do projeto > Geral > Seus apps > Web app > firebaseConfig)
    ====================================================================== */
 const firebaseConfig = {
-  apiKey: "COLE_AQUI_SUA_API_KEY",
-  authDomain: "SEU_PROJETO.firebaseapp.com",
-  projectId: "SEU_PROJETO",
-  storageBucket: "SEU_PROJETO.appspot.com",
-  messagingSenderId: "SEU_SENDER_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyA9y7pfDLMED_fHSHHnLNZNrWX0bHLebeg",
+  authDomain: "p-arte-wk.firebaseapp.com",
+  projectId: "p-arte-wk",
+  storageBucket: "p-arte-wk.firebasestorage.app",
+  messagingSenderId: "1051007736994",
+  appId: "G-BEYJGCXFK1"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -349,20 +349,15 @@ function formatDateBR(s){ const p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function addDays(dateObj,n){ const d=new Date(dateObj); d.setDate(d.getDate()+n); return d; }
 function getMonday(dateObj){ const d=new Date(dateObj); const day=d.getDay(); const diff=(day===0?-6:1-day); d.setDate(d.getDate()+diff); return d; }
 
-/* ---------- Classificacao (parametros de referencia definidos pela usuaria: normal = 120/80, pulso 60-100) ---------- */
+/* ---------- Classificacao clinica (referencia ACC/AHA) ---------- */
 function classifyBP(sis, dia){
   if(sis==null || dia==null) return { label:'-', color:'#8B8D8A', level:0 };
   if(sis>=180 || dia>=120) return { label:'Crise hipertensiva', color:'#7A1F1F', level:5 };
-  if(sis>=140 || dia>=90) return { label:'Hipertensao', color:'#B23A3A', level:4 };
-  if(sis>=121 || dia>=81) return { label:'Pressao elevada', color:'#C98A2C', level:3 };
-  if(sis<120 && dia<80) return { label:'Pressao baixa', color:'#3A5A78', level:-1 };
-  return { label:'Normal', color:'#3F7D5C', level:1 };
-}
-function classifyPulse(pul){
-  if(pul==null) return null;
-  if(pul<60) return { label:'Pulso baixo (bradicardia)', level:-1 };
-  if(pul>100) return { label:'Pulso alto (taquicardia)', level:1 };
-  return { label:'Normal', level:0 };
+  if(sis>=140 || dia>=90) return { label:'Hipertensao estagio 2', color:'#B23A3A', level:4 };
+  if(sis>=130 || dia>=80) return { label:'Hipertensao estagio 1', color:'#C1652B', level:3 };
+  if(sis>=120 && dia<80) return { label:'Pressao elevada', color:'#C98A2C', level:2 };
+  if(sis<120 && dia<80) return { label:'Normal', color:'#3F7D5C', level:1 };
+  return { label:'Indefinido', color:'#8B8D8A', level:0 };
 }
 const PERIOD_SHORT = { manha:'Manha', tarde:'Tarde', noite:'Noite', todos:'Todos' };
 function getPeriod(timeStr){
@@ -408,62 +403,13 @@ function trendDirection(avgs){
   return 'estavel';
 }
 
-/* ---------- Observacao (motor de regras local, sobre os parametros de referencia definidos) ---------- */
-function stddev(arr){
-  if(arr.length<2) return 0;
-  const m = arr.reduce(function(a,b){return a+b;},0)/arr.length;
-  const variance = arr.reduce(function(a,b){return a+(b-m)*(b-m);},0)/(arr.length-1);
-  return Math.sqrt(variance);
-}
+/* ---------- Observacao clinica (motor de regras local) ---------- */
 function generateFeedback(avgs, scopedRecs, isTotal){
   const lines = [];
   const todos = { sis:avgs.sis.todos, dia:avgs.dia.todos, pul:avgs.pul.todos };
   if(todos.sis==null) return ['Ainda nao ha registros suficientes neste periodo para gerar uma observacao.'];
   const cat = classifyBP(todos.sis, todos.dia);
-  lines.push('Media '+(isTotal?'geral':'da semana')+': '+todos.sis+'/'+todos.dia+' mmHg, faixa correspondente a "'+cat.label+'" considerando 120/80 mmHg como referencia de normalidade.');
-
-  // Amostra pequena: media pode nao refletir bem o quadro
-  if(scopedRecs.length>0 && scopedRecs.length<5){
-    lines.push('Esta media foi calculada com apenas '+scopedRecs.length+' registro'+(scopedRecs.length===1?'':'s')+' - com tao poucas medicoes, a media isolada tem pouco poder de representar o quadro geral.');
-  }
-
-  // Pressao baixa na media: atencao especial, pois pode ser sintomatica
-  if(cat.level===-1){
-    lines.push('A media aponta pressao baixa. Pressao baixa tambem pode causar sintomas (tontura, fraqueza, mal-estar, visao turva) mesmo quando o numero nao e classificado como preocupante por tabelas focadas em hipertensao - sintomas devem ser levados a serio independentemente da classificacao numerica.');
-  }
-
-  // Leituras individuais fora da faixa normal, nao so a media (media pode mascarar picos ou quedas pontuais)
-  const individualCats = scopedRecs.map(function(r){ return classifyBP(r.sis, r.dia); });
-  const nBaixa = individualCats.filter(function(c){ return c.level===-1; }).length;
-  const nAlta = individualCats.filter(function(c){ return c.level>=3; }).length;
-  const totalN = scopedRecs.length;
-  if(totalN>0){
-    if(nBaixa>0){
-      const pct = Math.round(100*nBaixa/totalN);
-      lines.push(nBaixa+' de '+totalN+' registro'+(totalN===1?'':'s')+' ('+pct+'%) individualmente ficaram na faixa de pressao baixa - mesmo que a media geral nao pareca baixa, esses episodios pontuais valem ser observados, especialmente se coincidiram com mal-estar.');
-    }
-    if(nAlta>0){
-      const pct = Math.round(100*nAlta/totalN);
-      lines.push(nAlta+' de '+totalN+' registro'+(totalN===1?'':'s')+' ('+pct+'%) individualmente ficaram acima da faixa considerada normal (pressao elevada, hipertensao ou crise).');
-    }
-  }
-
-  // Pressao de pulso (diferenca SIS - DIA): muito estreita ou muito larga pode ser relevante
-  if(todos.sis!=null && todos.dia!=null){
-    const pp = Math.round((todos.sis - todos.dia)*10)/10;
-    if(pp < 25) lines.push('A pressao de pulso media (diferenca entre SIS e DIA) esta em '+pp+' mmHg, considerada estreita (abaixo de 25 mmHg) - pode acontecer em quadros de pressao baixa ou reducao do volume de sangue bombeado.');
-    else if(pp > 60) lines.push('A pressao de pulso media (diferenca entre SIS e DIA) esta em '+pp+' mmHg, considerada larga (acima de 60 mmHg) - mais comum com o avanco da idade ou enrijecimento das arterias.');
-  }
-
-  // Variabilidade alta entre as medicoes
-  if(totalN>=4){
-    const sdSis = Math.round(stddev(scopedRecs.map(function(r){return r.sis;}))*10)/10;
-    if(sdSis >= 15){
-      lines.push('A sistolica variou bastante entre as medicoes deste periodo (desvio-padrao de '+sdSis+' mmHg) - variacao grande pode refletir fatores como estresse, horario, postura ou esforco recente antes de medir.');
-    }
-  }
-
-  // Diferenca entre periodos do dia
+  lines.push('Media '+(isTotal?'geral':'da semana')+': '+todos.sis+'/'+todos.dia+' mmHg, faixa correspondente a "'+cat.label+'" pelos criterios de classificacao de pressao arterial (ACC/AHA).');
   const periods = ['manha','tarde','noite'].filter(function(p){ return avgs.sis[p]!=null; });
   if(periods.length>=2){
     const maxP = periods.reduce(function(a,b){ return avgs.sis[b]>avgs.sis[a]?b:a; });
@@ -472,14 +418,10 @@ function generateFeedback(avgs, scopedRecs, isTotal){
       lines.push('A sistolica media e mais alta no periodo da '+PERIOD_SHORT[maxP].toLowerCase()+' ('+avgs.sis[maxP]+' mmHg) do que na '+PERIOD_SHORT[minP].toLowerCase()+' ('+avgs.sis[minP]+' mmHg) - vale mencionar essa variacao numa consulta.');
     }
   }
-
-  // Pulso
   if(todos.pul!=null){
-    if(todos.pul<60) lines.push('O pulso medio ('+todos.pul+' bpm) esta abaixo da faixa de referencia (60-100 bpm).');
-    else if(todos.pul>100) lines.push('O pulso medio ('+todos.pul+' bpm) esta acima da faixa de referencia (60-100 bpm).');
+    if(todos.pul<60) lines.push('O pulso medio ('+todos.pul+' bpm) esta abaixo da faixa usual de repouso (60-100 bpm).');
+    else if(todos.pul>100) lines.push('O pulso medio ('+todos.pul+' bpm) esta acima da faixa usual de repouso (60-100 bpm).');
   }
-
-  // Tendencia semanal (visao Total)
   if(isTotal){
     const trend = computeWeeklyTrend(scopedRecs, 'sis');
     if(trend.avgs.length>=2){
@@ -489,10 +431,7 @@ function generateFeedback(avgs, scopedRecs, isTotal){
       else lines.push('A media semanal de SIS tem se mantido relativamente estavel ao longo do periodo registrado.');
     }
   }
-
-  if(cat.level>=4) lines.push('Medias nesta faixa costumam ser associadas a hipertensao; considere procurar avaliacao medica em breve.');
-  if(cat.level===-1 && (nBaixa/Math.max(totalN,1)) >= 0.3) lines.push('Uma parte relevante dos registros ficou na faixa de pressao baixa - se isso tem vindo acompanhado de sintomas como os citados acima, vale procurar avaliacao medica, e nao apenas observar os numeros.');
-
+  if(cat.level>=4) lines.push('Medias nesta faixa costumam indicar hipertensao em estagio mais avancado; considere procurar avaliacao medica em breve.');
   return lines;
 }
 
@@ -649,7 +588,7 @@ function renderTable(recs){
 function renderFeedback(avgs, scopedRecs, isTotal){
   const lines = generateFeedback(avgs, scopedRecs, isTotal);
   return '<ul>'+lines.map(function(l){ return '<li>'+l+'</li>'; }).join('')+'</ul>'+
-  '<p class="disclaimer">Esta observacao e gerada localmente por um conjunto de regras, usando 120/80 mmHg e pulso 60-100 bpm como parametros de referencia - nao e enviada a nenhum servico de IA externo, nenhum dado sai do seu navegador/banco proprio. Nao e um diagnostico; sintomas relatados (tontura, mal-estar, fraqueza) sao sempre mais importantes do que a classificacao numerica isolada - procure avaliacao medica quando eles ocorrerem, independentemente do que a tabela mostrar.</p>';
+  '<p class="disclaimer">Esta observacao e gerada localmente por um conjunto de regras baseado em diretrizes gerais de classificacao de pressao arterial (ACC/AHA) - nao e enviada a nenhum servico de IA externo. Nao e um diagnostico; consulte um profissional de saude para interpretacao individual.</p>';
 }
 
 /* ---------- Barra de pessoas ---------- */
