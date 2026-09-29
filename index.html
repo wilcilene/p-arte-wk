@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Registro de Pressão Arterial</title>
+<title>p-arte-wk — Registro de Pressão Arterial</title>
+<link rel="icon" type="image/png" href="logo.png">
 <style>
   :root{
     --bg:#F4F6F5;
@@ -33,6 +34,9 @@
   #login-screen fieldset{border:1px solid var(--border); border-radius:4px; padding:10px 12px; margin:0 0 14px;}
   #login-screen legend{font-size:12px; color:var(--muted); padding:0 4px;}
   #login-screen label.radio{display:block; font-size:13.5px; margin-bottom:6px; font-weight:normal; cursor:pointer;}
+  .brand-logo{display:block; width:56px; height:56px; object-fit:contain; margin:0 0 12px; border-radius:8px;}
+  .brand-row{display:flex; align-items:center; gap:14px;}
+  .brand-logo-header{width:48px; height:48px; margin:0;}
   header.app-header{padding:24px clamp(16px,4vw,48px) 16px; border-bottom:1px solid var(--border); background:var(--panel);}
   header.app-header .top-row{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;}
   header.app-header h1{font-family:Georgia,"Iowan Old Style","Palatino Linotype",serif; font-weight:600; font-size:26px; margin:0 0 4px; color:var(--ink);}
@@ -95,6 +99,7 @@
 <body>
 
 <div id="login-screen">
+  <img src="logo.png" alt="p-arte-wk" class="brand-logo">
   <h1>Registro de pressão arterial</h1>
   <p class="sub" id="login-subtitle">Entre com sua conta ou crie uma nova para começar a registrar.</p>
   <div class="field" style="margin-bottom:10px;"><label>E-mail</label><input type="email" id="login-email" placeholder="voce@exemplo.com"></div>
@@ -120,9 +125,12 @@
 <div id="app-screen" style="display:none;">
   <header class="app-header">
     <div class="top-row">
-      <div>
-        <h1>Registro de pressão arterial</h1>
-        <p>Acompanhamento horário de SIS, DIA e pulso — sincronizado entre todos que compartilham o mesmo espaço.</p>
+      <div class="brand-row">
+        <img src="logo.png" alt="p-arte-wk" class="brand-logo brand-logo-header">
+        <div>
+          <h1>Registro de pressão arterial</h1>
+          <p>Acompanhamento horário de SIS, DIA e pulso — sincronizado entre todos que compartilham o mesmo espaço.</p>
+        </div>
       </div>
       <div class="session-info" id="session-info"></div>
     </div>
@@ -158,8 +166,9 @@ const db = firebase.firestore();
 let pessoas = [];
 let records = [];
 let selectedPessoaId = null;
-let currentGroupId = null;
-let myRole = null; // 'owner' ou 'viewer'
+let currentGroupId = null;   // espaco sendo visualizado agora
+let myHomeGroupId = null;    // espaco que esta conta criou (o "dela"), nunca muda ao trocar de espaco
+let myRole = null; // 'owner' ou 'viewer' - derivado de currentGroupId===myHomeGroupId
 let authMode = 'login';
 let state = { tab:'registrar', dayOffset:0, weekOffset:0, editingId:null };
 let unsubscribePessoas = null, unsubscribeRegistros = null;
@@ -212,20 +221,20 @@ async function doSignup(){
   errEl.textContent = '';
   if(!email || !senha){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
   const joinMode = document.querySelector('input[name="join-mode"]:checked').value;
-  let groupId, role;
+  let groupId, homeGroupId;
   if(joinMode === 'join'){
     const code = document.getElementById('join-code').value.trim().toUpperCase();
     if(!code){ errEl.textContent = 'Informe o codigo do espaco.'; return; }
     groupId = code;
-    role = 'viewer'; // quem entra com um codigo alheio so pode visualizar
+    homeGroupId = null; // quem entra com codigo alheio nao tem espaco proprio - so visualiza
   } else {
     groupId = generateGroupCode();
-    role = 'owner'; // quem cria o espaco e o dono, pode editar
+    homeGroupId = groupId; // quem cria o espaco e o dono dele, permanentemente
   }
   try{
     const cred = await auth.createUserWithEmailAndPassword(email, senha);
     await db.collection('users').doc(cred.user.uid).set({
-      email: email, groupId: groupId, role: role, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      email: email, groupId: groupId, homeGroupId: homeGroupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     });
   }catch(err){
     errEl.textContent = 'Nao foi possivel criar a conta: ' + traduzErroAuth(err.code);
@@ -233,17 +242,31 @@ async function doSignup(){
 }
 function doLogout(){ auth.signOut(); }
 
+function computeRole(){
+  myRole = (myHomeGroupId && currentGroupId === myHomeGroupId) ? 'owner' : 'viewer';
+}
 async function joinAnotherGroup(){
-  const code = prompt('Digite o codigo do espaco que deseja usar:');
+  const code = prompt('Digite o codigo do espaco que deseja visualizar:');
   if(!code) return;
   const groupId = code.trim().toUpperCase();
-  // Entrar num espaco por codigo sempre concede papel de visualizador;
-  // quem quer editar precisa ser quem criou o espaco (owner original).
-  await db.collection('users').doc(auth.currentUser.uid).set({
-    email: auth.currentUser.email, groupId: groupId, role: 'viewer', criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-  }, { merge:true });
+  // Trocar de espaco so muda QUAL espaco esta sendo visualizado agora.
+  // O espaco que esta conta criou (myHomeGroupId) nunca e alterado aqui,
+  // entao voltar para o proprio espaco depois restaura o papel de dono.
+  await db.collection('users').doc(auth.currentUser.uid).set({ groupId: groupId }, { merge:true });
   currentGroupId = groupId;
-  myRole = 'viewer';
+  computeRole();
+  if(unsubscribePessoas) unsubscribePessoas();
+  if(unsubscribeRegistros) unsubscribeRegistros();
+  pessoas = []; records = []; selectedPessoaId = null;
+  updateSessionInfo();
+  startListeners();
+}
+async function goToMySpace(){
+  if(!myHomeGroupId){ alert('Esta conta nao possui um espaco proprio (entrou usando o codigo de outra pessoa).'); return; }
+  if(currentGroupId === myHomeGroupId) return;
+  await db.collection('users').doc(auth.currentUser.uid).set({ groupId: myHomeGroupId }, { merge:true });
+  currentGroupId = myHomeGroupId;
+  computeRole();
   if(unsubscribePessoas) unsubscribePessoas();
   if(unsubscribeRegistros) unsubscribeRegistros();
   pessoas = []; records = []; selectedPessoaId = null;
@@ -251,10 +274,11 @@ async function joinAnotherGroup(){
   startListeners();
 }
 function copyGroupCode(){
+  const code = myHomeGroupId || currentGroupId;
   if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(currentGroupId).then(function(){ alert('Codigo copiado: '+currentGroupId); });
+    navigator.clipboard.writeText(code).then(function(){ alert('Codigo copiado: '+code); });
   } else {
-    prompt('Copie o codigo do espaco:', currentGroupId);
+    prompt('Copie o codigo do espaco:', code);
   }
 }
 function updateSessionInfo(){
@@ -263,12 +287,14 @@ function updateSessionInfo(){
   const roleLabel = myRole==='owner'
     ? '<span class="badge" style="background:#1F6F63;">Dono do espaco - pode editar</span>'
     : '<span class="badge" style="background:#5B6764;">Somente visualizacao</span>';
+  const vendoOutro = myHomeGroupId && currentGroupId !== myHomeGroupId;
   document.getElementById('session-info').innerHTML =
     'Conectado como '+user.email+'<br>'+
     'Espaco: <strong>'+currentGroupId+'</strong> '+roleLabel+'<br>'+
-    (myRole==='owner' ? '<button class="btn secondary small" onclick="copyGroupCode()">Copiar codigo</button> ' : '')+
-    '<button class="btn secondary small" onclick="joinAnotherGroup()">Trocar espaco</button><br>'+
-    '<a href="#" onclick="doLogout();return false;">Sair</a>';
+    (myHomeGroupId ? '<button class="btn secondary small" onclick="copyGroupCode()">Copiar meu codigo</button> ' : '')+
+    '<button class="btn secondary small" onclick="joinAnotherGroup()">Visualizar outro espaco</button> '+
+    (vendoOutro ? '<button class="btn secondary small" onclick="goToMySpace()">Voltar ao meu espaco</button> ' : '')+
+    '<br><a href="#" onclick="doLogout();return false;">Sair</a>';
 }
 
 auth.onAuthStateChanged(async function(user){
@@ -276,18 +302,24 @@ auth.onAuthStateChanged(async function(user){
     try{
       const docSnap = await db.collection('users').doc(user.uid).get();
       if(docSnap.exists && docSnap.data().groupId){
-        currentGroupId = docSnap.data().groupId;
-        // Contas criadas antes do controle de papeis nao tem "role" salvo -
-        // tratamos como owner, ja que essas pessoas ja vinham editando dados.
-        myRole = docSnap.data().role || 'owner';
-        if(!docSnap.data().role){
-          await db.collection('users').doc(user.uid).set({ role: 'owner' }, { merge:true });
+        const d = docSnap.data();
+        currentGroupId = d.groupId;
+        if(typeof d.homeGroupId !== 'undefined'){
+          myHomeGroupId = d.homeGroupId;
+        } else {
+          // Migracao de contas criadas antes do conceito de "espaco proprio":
+          // quem tinha role antigo 'owner' (ou nenhum registro de role) vira dona
+          // do espaco em que estava; quem tinha 'viewer' fica sem espaco proprio.
+          myHomeGroupId = (d.role === 'viewer') ? null : d.groupId;
+          await db.collection('users').doc(user.uid).set({ homeGroupId: myHomeGroupId }, { merge:true });
         }
+        computeRole();
       } else {
         currentGroupId = generateGroupCode();
-        myRole = 'owner';
+        myHomeGroupId = currentGroupId;
+        computeRole();
         await db.collection('users').doc(user.uid).set({
-          email:user.email, groupId:currentGroupId, role:'owner', criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+          email:user.email, groupId:currentGroupId, homeGroupId:currentGroupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge:true });
       }
     }catch(err){
@@ -302,7 +334,7 @@ auth.onAuthStateChanged(async function(user){
   } else {
     if(unsubscribePessoas) unsubscribePessoas();
     if(unsubscribeRegistros) unsubscribeRegistros();
-    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null; myRole = null;
+    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null; myHomeGroupId = null; myRole = null;
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
   }

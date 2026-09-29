@@ -27,14 +27,22 @@ This app needs a free [Firebase](https://console.firebase.google.com) project to
    service cloud.firestore {
      match /databases/{database}/documents {
        function signedIn() { return request.auth != null; }
-       function myGroup() {
-         return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId;
+       function myUser() {
+         return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
        }
+       function myGroup() { return myUser().groupId; }
        function isOwner() {
-         return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+         return myUser().homeGroupId != null && myUser().groupId == myUser().homeGroupId;
        }
        match /users/{uid} {
-         allow read, write: if signedIn() && request.auth.uid == uid;
+         allow read: if signedIn() && request.auth.uid == uid;
+         allow create: if signedIn() && request.auth.uid == uid;
+         // groupId pode mudar livremente (trocar de espaco para visualizar outro),
+         // mas homeGroupId (o espaco que esta conta criou/possui) e travado depois
+         // de definido pela primeira vez - ninguem pode "virar dono" de um espaco
+         // alheio reescrevendo o proprio documento.
+         allow update: if signedIn() && request.auth.uid == uid &&
+           ( !('homeGroupId' in resource.data) || request.resource.data.homeGroupId == resource.data.homeGroupId );
        }
        match /pessoas/{id} {
          allow read: if signedIn() && resource.data.groupId == myGroup();
@@ -50,7 +58,7 @@ This app needs a free [Firebase](https://console.firebase.google.com) project to
    }
    ```
 
-   Anyone who creates a new space becomes its `owner` (full read/write). Anyone who joins an existing space with a code becomes a `viewer` (read-only) — the rules above enforce that server-side, not just in the UI.
+   Each account has a `groupId` (the space currently being viewed, which can change) and a `homeGroupId` (the space this account created, set once and locked afterward). `isOwner()` is true only while `groupId == homeGroupId` — so switching to view someone else's space demotes you to read-only there, and switching back to your own space code automatically restores edit rights, without needing a separate mutable "role" field that a user could otherwise rewrite on their own document.
 
 5. In Project settings → General → Your apps, register a **Web app** and copy the `firebaseConfig` object.
 6. Open `index.html` and replace the placeholder `firebaseConfig` near the top of the `<script>` block with your own values.
