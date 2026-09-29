@@ -30,20 +30,27 @@ This app needs a free [Firebase](https://console.firebase.google.com) project to
        function myGroup() {
          return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId;
        }
+       function isOwner() {
+         return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'owner';
+       }
        match /users/{uid} {
          allow read, write: if signedIn() && request.auth.uid == uid;
        }
        match /pessoas/{id} {
-         allow read, update, delete: if signedIn() && resource.data.groupId == myGroup();
-         allow create: if signedIn() && request.resource.data.groupId == myGroup();
+         allow read: if signedIn() && resource.data.groupId == myGroup();
+         allow create: if signedIn() && isOwner() && request.resource.data.groupId == myGroup();
+         allow update, delete: if signedIn() && isOwner() && resource.data.groupId == myGroup();
        }
        match /registros/{id} {
-         allow read, update, delete: if signedIn() && resource.data.groupId == myGroup();
-         allow create: if signedIn() && request.resource.data.groupId == myGroup();
+         allow read: if signedIn() && resource.data.groupId == myGroup();
+         allow create: if signedIn() && isOwner() && request.resource.data.groupId == myGroup();
+         allow update, delete: if signedIn() && isOwner() && resource.data.groupId == myGroup();
        }
      }
    }
    ```
+
+   Anyone who creates a new space becomes its `owner` (full read/write). Anyone who joins an existing space with a code becomes a `viewer` (read-only) — the rules above enforce that server-side, not just in the UI.
 
 5. In Project settings → General → Your apps, register a **Web app** and copy the `firebaseConfig` object.
 6. Open `index.html` and replace the placeholder `firebaseConfig` near the top of the `<script>` block with your own values.

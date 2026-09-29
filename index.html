@@ -147,7 +147,8 @@ const firebaseConfig = {
   projectId: "p-arte-wk",
   storageBucket: "p-arte-wk.firebasestorage.app",
   messagingSenderId: "1051007736994",
-  appId: "G-BEYJGCXFK1"
+  appId: "1:1051007736994:web:8807790e33f9f78b3dcbfb",
+  measurementId: "G-BEYJGCXFK1"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -158,6 +159,7 @@ let pessoas = [];
 let records = [];
 let selectedPessoaId = null;
 let currentGroupId = null;
+let myRole = null; // 'owner' ou 'viewer'
 let authMode = 'login';
 let state = { tab:'registrar', dayOffset:0, weekOffset:0, editingId:null };
 let unsubscribePessoas = null, unsubscribeRegistros = null;
@@ -210,18 +212,20 @@ async function doSignup(){
   errEl.textContent = '';
   if(!email || !senha){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
   const joinMode = document.querySelector('input[name="join-mode"]:checked').value;
-  let groupId;
+  let groupId, role;
   if(joinMode === 'join'){
     const code = document.getElementById('join-code').value.trim().toUpperCase();
     if(!code){ errEl.textContent = 'Informe o codigo do espaco.'; return; }
     groupId = code;
+    role = 'viewer'; // quem entra com um codigo alheio so pode visualizar
   } else {
     groupId = generateGroupCode();
+    role = 'owner'; // quem cria o espaco e o dono, pode editar
   }
   try{
     const cred = await auth.createUserWithEmailAndPassword(email, senha);
     await db.collection('users').doc(cred.user.uid).set({
-      email: email, groupId: groupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+      email: email, groupId: groupId, role: role, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
     });
   }catch(err){
     errEl.textContent = 'Nao foi possivel criar a conta: ' + traduzErroAuth(err.code);
@@ -233,10 +237,13 @@ async function joinAnotherGroup(){
   const code = prompt('Digite o codigo do espaco que deseja usar:');
   if(!code) return;
   const groupId = code.trim().toUpperCase();
+  // Entrar num espaco por codigo sempre concede papel de visualizador;
+  // quem quer editar precisa ser quem criou o espaco (owner original).
   await db.collection('users').doc(auth.currentUser.uid).set({
-    email: auth.currentUser.email, groupId: groupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    email: auth.currentUser.email, groupId: groupId, role: 'viewer', criadoEm: firebase.firestore.FieldValue.serverTimestamp()
   }, { merge:true });
   currentGroupId = groupId;
+  myRole = 'viewer';
   if(unsubscribePessoas) unsubscribePessoas();
   if(unsubscribeRegistros) unsubscribeRegistros();
   pessoas = []; records = []; selectedPessoaId = null;
@@ -253,10 +260,13 @@ function copyGroupCode(){
 function updateSessionInfo(){
   const user = auth.currentUser;
   if(!user) return;
+  const roleLabel = myRole==='owner'
+    ? '<span class="badge" style="background:#1F6F63;">Dono do espaco - pode editar</span>'
+    : '<span class="badge" style="background:#5B6764;">Somente visualizacao</span>';
   document.getElementById('session-info').innerHTML =
     'Conectado como '+user.email+'<br>'+
-    'Espaco: <strong>'+currentGroupId+'</strong> '+
-    '<button class="btn secondary small" onclick="copyGroupCode()">Copiar codigo</button> '+
+    'Espaco: <strong>'+currentGroupId+'</strong> '+roleLabel+'<br>'+
+    (myRole==='owner' ? '<button class="btn secondary small" onclick="copyGroupCode()">Copiar codigo</button> ' : '')+
     '<button class="btn secondary small" onclick="joinAnotherGroup()">Trocar espaco</button><br>'+
     '<a href="#" onclick="doLogout();return false;">Sair</a>';
 }
@@ -267,10 +277,17 @@ auth.onAuthStateChanged(async function(user){
       const docSnap = await db.collection('users').doc(user.uid).get();
       if(docSnap.exists && docSnap.data().groupId){
         currentGroupId = docSnap.data().groupId;
+        // Contas criadas antes do controle de papeis nao tem "role" salvo -
+        // tratamos como owner, ja que essas pessoas ja vinham editando dados.
+        myRole = docSnap.data().role || 'owner';
+        if(!docSnap.data().role){
+          await db.collection('users').doc(user.uid).set({ role: 'owner' }, { merge:true });
+        }
       } else {
         currentGroupId = generateGroupCode();
+        myRole = 'owner';
         await db.collection('users').doc(user.uid).set({
-          email:user.email, groupId:currentGroupId, criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+          email:user.email, groupId:currentGroupId, role:'owner', criadoEm: firebase.firestore.FieldValue.serverTimestamp()
         }, { merge:true });
       }
     }catch(err){
@@ -285,7 +302,7 @@ auth.onAuthStateChanged(async function(user){
   } else {
     if(unsubscribePessoas) unsubscribePessoas();
     if(unsubscribeRegistros) unsubscribeRegistros();
-    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null;
+    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null; myRole = null;
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
   }
@@ -311,7 +328,15 @@ function startListeners(){
 }
 
 /* ---------- Pessoas ---------- */
+function requireOwner(){
+  if(myRole !== 'owner'){
+    alert('Voce esta em modo de visualizacao - apenas o dono do espaco pode fazer essa alteracao.');
+    return false;
+  }
+  return true;
+}
 async function addPessoaInline(){
+  if(!requireOwner()) return;
   const input = document.getElementById('novo-nome-pessoa-inline');
   const nome = input.value.trim();
   if(!nome) return;
@@ -320,6 +345,7 @@ async function addPessoaInline(){
   input.value = '';
 }
 async function addPessoaPrimeira(){
+  if(!requireOwner()) return;
   const input = document.getElementById('novo-nome-pessoa');
   const nome = input.value.trim();
   if(!nome) return;
@@ -327,6 +353,7 @@ async function addPessoaPrimeira(){
   selectedPessoaId = ref.id;
 }
 async function removePessoa(id){
+  if(!requireOwner()) return;
   const p = pessoas.find(function(x){ return x.id===id; });
   if(!p) return;
   if(confirm('Remover "'+p.nome+'"? Os registros feitos para essa pessoa continuarao no banco, mas ficarao sem nome associado.')){
@@ -633,15 +660,16 @@ function renderAvgGrid(avgs){
 }
 function renderTable(recs){
   if(!recs.length) return '<p class="empty">Nenhum registro neste periodo.</p>';
+  const canEdit = myRole === 'owner';
   const sorted = recs.slice().sort(function(a,b){ return (b.date+b.time).localeCompare(a.date+a.time); });
   return '<div style="overflow-x:auto"><table><thead><tr>'+
-    '<th>Data</th><th>Hora</th><th>Periodo</th><th>SIS</th><th>DIA</th><th>Pulso</th><th></th>'+
+    '<th>Data</th><th>Hora</th><th>Periodo</th><th>SIS</th><th>DIA</th><th>Pulso</th>'+(canEdit?'<th></th>':'')+
   '</tr></thead><tbody>'+
     sorted.map(function(r){
       return '<tr>'+
       '<td>'+formatDateBR(r.date)+'</td><td>'+r.time+'</td><td>'+PERIOD_SHORT[getPeriod(r.time)]+'</td>'+
       '<td>'+r.sis+'</td><td>'+r.dia+'</td><td>'+r.pul+'</td>'+
-      '<td class="actions"><button onclick="editRecord(\''+r.id+'\')">Editar</button><button class="danger" onclick="deleteRecord(\''+r.id+'\')">Excluir</button></td>'+
+      (canEdit ? '<td class="actions"><button onclick="editRecord(\''+r.id+'\')">Editar</button><button class="danger" onclick="deleteRecord(\''+r.id+'\')">Excluir</button></td>' : '')+
       '</tr>';
     }).join('')+
   '</tbody></table></div>';
@@ -655,11 +683,18 @@ function renderFeedback(avgs, scopedRecs, isTotal){
 /* ---------- Barra de pessoas ---------- */
 function renderPersonBar(){
   const bar = document.getElementById('person-bar');
+  const canEdit = myRole === 'owner';
   if(!pessoas.length){
+    if(!canEdit){
+      bar.innerHTML = '<span style="font-size:13px;color:var(--muted);">Nenhuma pessoa cadastrada neste espaco ainda. Peca ao dono do espaco para cadastrar.</span>';
+      document.getElementById('tabs').innerHTML = '';
+      document.getElementById('main').innerHTML = '<div class="panel"><p class="empty">Voce esta em modo de visualizacao. Assim que o dono do espaco cadastrar uma pessoa, os dados aparecerao aqui.</p></div>';
+      return false;
+    }
     bar.innerHTML =
       '<div class="group-box" style="width:100%;">'+
         'Seu espaco compartilhado: <span class="group-code">'+currentGroupId+'</span><br>'+
-        'Passe esse codigo para quem voce quiser que compartilhe os dados com voce (ele(a) escolhe "Entrar em um espaco existente" ao criar a conta).'+
+        'Passe esse codigo para quem voce quiser que veja os dados com voce (ele(a) escolhe "Entrar em um espaco existente" ao criar a conta - entra como visualizador, sem poder editar).'+
       '</div>'+
       '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px;width:100%;">'+
         '<span style="font-size:13px;color:var(--muted);">Nenhuma pessoa cadastrada ainda.</span>'+
@@ -676,9 +711,12 @@ function renderPersonBar(){
   bar.innerHTML =
     '<label style="font-size:12px;color:var(--muted);">Pessoa</label>'+
     '<select id="pessoa-select" onchange="selectPessoa(this.value)">'+options+'</select>'+
-    '<input id="novo-nome-pessoa-inline" placeholder="Nova pessoa">'+
-    '<button class="btn secondary" onclick="addPessoaInline()">+ Adicionar</button>'+
-    '<button class="btn secondary" style="border-color:#B23A3A;color:#B23A3A;" onclick="removePessoa(selectedPessoaId)">Remover pessoa atual</button>';
+    (canEdit ?
+      '<input id="novo-nome-pessoa-inline" placeholder="Nova pessoa">'+
+      '<button class="btn secondary" onclick="addPessoaInline()">+ Adicionar</button>'+
+      '<button class="btn secondary" style="border-color:#B23A3A;color:#B23A3A;" onclick="removePessoa(selectedPessoaId)">Remover pessoa atual</button>'
+      : '<span class="badge" style="background:#5B6764;">Somente visualizacao</span>'
+    );
   return true;
 }
 
@@ -698,12 +736,14 @@ function render(){
 function switchTab(t){ state.tab=t; if(t!=='registrar') state.editingId=null; render(); window.scrollTo(0,0); }
 
 function renderRegistrar(scoped){
+  const canEdit = myRole === 'owner';
   const editing = state.editingId ? scoped.find(function(r){ return r.id===state.editingId; }) : null;
   const dayDate = addDays(new Date(), state.dayOffset);
   const dayStr = toDateStr(dayDate);
   const dayRecs = scoped.filter(function(r){ return r.date===dayStr; });
   const avgs = buildAverages(dayRecs);
   document.getElementById('main').innerHTML =
+    (canEdit ?
     '<div class="panel">'+
       '<h2>'+(editing ? 'Editar registro' : 'Novo registro')+'</h2>'+
       '<div class="row">'+
@@ -716,7 +756,8 @@ function renderRegistrar(scoped){
         (editing ? '<button class="btn secondary" onclick="cancelEdit()">Cancelar</button>' : '')+
       '</div>'+
       '<p style="font-size:12px;color:var(--muted);margin:12px 0 0;">A data e a hora vem preenchidas com o momento atual - ajuste-as se estiver registrando uma medicao com atraso.</p>'+
-    '</div>'+
+    '</div>'
+    : '<div class="panel"><p class="empty">Voce esta em modo de visualizacao - apenas o dono do espaco pode registrar ou editar medicoes.</p></div>')+
     '<div class="panel">'+
       '<div class="day-nav">'+
         '<button onclick="changeDay(-1)">‹ Dia anterior</button>'+
@@ -783,8 +824,9 @@ function renderTotal(scoped){
     '<div class="panel"><h2>Dados e backup</h2>'+
       '<div class="row">'+
         '<button class="btn secondary" onclick="exportData()">Exportar backup (JSON, deste espaco)</button>'+
-        '<div class="field"><label>Importar backup</label><input type="file" accept="application/json" onchange="importData(this)"></div>'+
+        (myRole==='owner' ? '<div class="field"><label>Importar backup</label><input type="file" accept="application/json" onchange="importData(this)"></div>' : '')+
       '</div>'+
+      (myRole!=='owner' ? '<p style="font-size:12px;color:var(--muted);margin-top:10px;">Voce esta em modo de visualizacao - somente o dono do espaco pode importar dados.</p>' : '')+
     '</div>'+
     '<div class="panel"><h2>Todos os registros desta pessoa ('+scoped.length+')</h2>'+renderTable(scoped)+'</div>';
   drawSeriesChart('chart-total-line', scoped);
@@ -797,6 +839,7 @@ function renderTotal(scoped){
 
 /* ---------- CRUD de registros (Firestore) ---------- */
 async function saveRecord(){
+  if(!requireOwner()) return;
   if(!selectedPessoaId){ alert('Cadastre/selecione uma pessoa primeiro.'); return; }
   const date = document.getElementById('f-date').value;
   const time = document.getElementById('f-time').value;
@@ -823,6 +866,7 @@ async function saveRecord(){
 function editRecord(id){ state.editingId = id; state.tab = 'registrar'; render(); window.scrollTo(0,0); }
 function cancelEdit(){ state.editingId = null; render(); }
 async function deleteRecord(id){
+  if(!requireOwner()) return;
   if(confirm('Excluir este registro?')){
     await db.collection('registros').doc(id).delete();
   }
@@ -842,6 +886,7 @@ function exportData(){
   URL.revokeObjectURL(url);
 }
 async function importData(input){
+  if(!requireOwner()) return;
   const file = input.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = async function(e){
