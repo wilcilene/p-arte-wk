@@ -165,14 +165,13 @@ const db = firebase.firestore();
 /* ---------- Estado em memoria ---------- */
 let pessoas = [];
 let records = [];
-let exames = []; // independente de pessoa - historico de exames do espaco
 let selectedPessoaId = null;
 let currentGroupId = null;   // espaco sendo visualizado agora
 let myHomeGroupId = null;    // espaco que esta conta criou (o "dela"), nunca muda ao trocar de espaco
 let myRole = null; // 'owner' ou 'viewer' - derivado de currentGroupId===myHomeGroupId
 let authMode = 'login';
-let state = { tab:'registrar', dayOffset:0, weekOffset:0, editingId:null, exameParam:null, exameEditingId:null };
-let unsubscribePessoas = null, unsubscribeRegistros = null, unsubscribeExames = null;
+let state = { tab:'registrar', dayOffset:0, weekOffset:0, editingId:null };
+let unsubscribePessoas = null, unsubscribeRegistros = null;
 
 /* ---------- Autenticacao ---------- */
 function toggleAuthMode(){
@@ -258,8 +257,7 @@ async function joinAnotherGroup(){
   computeRole();
   if(unsubscribePessoas) unsubscribePessoas();
   if(unsubscribeRegistros) unsubscribeRegistros();
-  if(unsubscribeExames) unsubscribeExames();
-  pessoas = []; records = []; exames = []; selectedPessoaId = null;
+  pessoas = []; records = []; selectedPessoaId = null;
   updateSessionInfo();
   startListeners();
 }
@@ -271,8 +269,7 @@ async function goToMySpace(){
   computeRole();
   if(unsubscribePessoas) unsubscribePessoas();
   if(unsubscribeRegistros) unsubscribeRegistros();
-  if(unsubscribeExames) unsubscribeExames();
-  pessoas = []; records = []; exames = []; selectedPessoaId = null;
+  pessoas = []; records = []; selectedPessoaId = null;
   updateSessionInfo();
   startListeners();
 }
@@ -337,8 +334,7 @@ auth.onAuthStateChanged(async function(user){
   } else {
     if(unsubscribePessoas) unsubscribePessoas();
     if(unsubscribeRegistros) unsubscribeRegistros();
-    if(unsubscribeExames) unsubscribeExames();
-    pessoas = []; records = []; exames = []; selectedPessoaId = null; currentGroupId = null; myHomeGroupId = null; myRole = null;
+    pessoas = []; records = []; selectedPessoaId = null; currentGroupId = null; myHomeGroupId = null; myRole = null;
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
   }
@@ -361,13 +357,6 @@ function startListeners(){
       records = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); });
       render();
     }, function(err){ alert('Erro ao carregar registros: '+err.message); });
-
-  unsubscribeExames = db.collection('exames')
-    .where('groupId','==',currentGroupId)
-    .onSnapshot(function(snap){
-      exames = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); });
-      render();
-    }, function(err){ alert('Erro ao carregar exames: '+err.message); });
 }
 
 /* ---------- Pessoas ---------- */
@@ -730,6 +719,8 @@ function renderPersonBar(){
   if(!pessoas.length){
     if(!canEdit){
       bar.innerHTML = '<span style="font-size:13px;color:var(--muted);">Nenhuma pessoa cadastrada neste espaco ainda. Peca ao dono do espaco para cadastrar.</span>';
+      document.getElementById('tabs').innerHTML = '';
+      document.getElementById('main').innerHTML = '<div class="panel"><p class="empty">Voce esta em modo de visualizacao. Assim que o dono do espaco cadastrar uma pessoa, os dados aparecerao aqui.</p></div>';
       return false;
     }
     bar.innerHTML =
@@ -742,6 +733,8 @@ function renderPersonBar(){
         '<input id="novo-nome-pessoa" placeholder="Nome da pessoa">'+
         '<button class="btn" onclick="addPessoaPrimeira()">Cadastrar</button>'+
       '</div>';
+    document.getElementById('tabs').innerHTML = '';
+    document.getElementById('main').innerHTML = '<div class="panel"><p class="empty">Cadastre a primeira pessoa acima para comecar a registrar medicoes.</p></div>';
     return false;
   }
   const options = pessoas.map(function(p){
@@ -761,24 +754,18 @@ function renderPersonBar(){
 
 /* ---------- Abas ---------- */
 function render(){
-  const hasPessoas = renderPersonBar();
-  document.getElementById('tabs').innerHTML = ['registrar','semanal','total','exames'].map(function(t){
-    const names = { registrar:'Registrar / Dia', semanal:'Semanal', total:'Total', exames:'Exames' };
+  const ok = renderPersonBar();
+  if(!ok) return;
+  document.getElementById('tabs').innerHTML = ['registrar','semanal','total'].map(function(t){
+    const names = { registrar:'Registrar / Dia', semanal:'Semanal', total:'Total' };
     return '<button class="'+(state.tab===t?'active':'')+'" onclick="switchTab(\''+t+'\')">'+names[t]+'</button>';
   }).join('');
-
-  if(state.tab==='exames'){ renderExames(); return; }
-
-  if(!hasPessoas){
-    document.getElementById('main').innerHTML = '<div class="panel"><p class="empty">Cadastre uma pessoa na barra acima para registrar medicoes de pressao (a aba Exames funciona mesmo sem pessoas cadastradas).</p></div>';
-    return;
-  }
   const scoped = records.filter(function(r){ return r.pessoaId===selectedPessoaId; });
   if(state.tab==='registrar') renderRegistrar(scoped);
   else if(state.tab==='semanal') renderSemanal(scoped);
   else renderTotal(scoped);
 }
-function switchTab(t){ state.tab=t; if(t!=='registrar') state.editingId=null; if(t!=='exames') state.exameEditingId=null; render(); window.scrollTo(0,0); }
+function switchTab(t){ state.tab=t; if(t!=='registrar') state.editingId=null; render(); window.scrollTo(0,0); }
 
 function renderRegistrar(scoped){
   const canEdit = myRole === 'owner';
@@ -959,227 +946,6 @@ async function importData(input){
     }catch(err){ alert('Erro ao importar arquivo: '+err.message); }
   };
   reader.readAsText(file);
-}
-
-/* ======================================================================
-   EXAMES - historico independente de "pessoa", visivel a todo o espaco,
-   editavel apenas pelo dono. Pensado para popular via colagem de uma
-   tabela (Exame | Parametro | Valor | Unidade | Ref.min | Ref.max | Data | Analise)
-   que o Claude reduz a partir de um laudo, ou por cadastro manual.
-   ====================================================================== */
-function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-
-function classifyExameStatus(valor, refMin, refMax){
-  if(refMin==null && refMax==null) return { label:'-', color:'#8B8D8A' };
-  let fora = false;
-  if(refMin!=null && valor<refMin) fora = true;
-  if(refMax!=null && valor>refMax) fora = true;
-  return fora ? { label:'Fora da faixa', color:'#B23A3A' } : { label:'Dentro da faixa', color:'#3F7D5C' };
-}
-
-function parseFlexDate(s){
-  s = (s||'').trim();
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if(m) return m[3]+'-'+pad(parseInt(m[2],10))+'-'+pad(parseInt(m[1],10));
-  return null;
-}
-
-function parseExamPasteText(text){
-  const lines = text.split('\n');
-  const ok = []; const errors = [];
-  lines.forEach(function(line, idx){
-    let raw = line.trim();
-    if(!raw) return;
-    if(raw.charAt(0)==='|') raw = raw.slice(1);
-    if(raw.charAt(raw.length-1)==='|') raw = raw.slice(0,-1);
-    raw = raw.trim();
-    if(!raw) return;
-    if(/^[-:\s|]+$/.test(raw)) return; // linha separadora de tabela markdown
-    let cols;
-    if(raw.indexOf('\t')>=0) cols = raw.split('\t');
-    else if(raw.indexOf('|')>=0) cols = raw.split('|');
-    else cols = raw.split(',');
-    cols = cols.map(function(c){ return c.trim(); });
-    if(/^exame$/i.test(cols[0])) return; // linha de cabecalho
-    while(cols.length<8) cols.push('');
-    const exameNome=cols[0], parametro=cols[1], valorStr=cols[2], unidade=cols[3], refMinStr=cols[4], refMaxStr=cols[5], dataStr=cols[6], analise=cols[7];
-    if(!exameNome || !parametro){ errors.push({line: idx+1, reason:'faltando exame ou parametro'}); return; }
-    const valor = parseFloat(String(valorStr).replace(',','.'));
-    if(isNaN(valor)){ errors.push({line: idx+1, reason:'valor invalido ("'+valorStr+'")'}); return; }
-    const dataNorm = parseFlexDate(dataStr);
-    if(!dataNorm){ errors.push({line: idx+1, reason:'data invalida ("'+dataStr+'") - use DD/MM/AAAA ou AAAA-MM-DD'}); return; }
-    const refMinParsed = (refMinStr && refMinStr!=='-') ? parseFloat(String(refMinStr).replace(',','.')) : NaN;
-    const refMaxParsed = (refMaxStr && refMaxStr!=='-') ? parseFloat(String(refMaxStr).replace(',','.')) : NaN;
-    ok.push({
-      exame: exameNome, parametro: parametro, valor: valor,
-      unidade: (unidade && unidade!=='-') ? unidade : '',
-      refMin: isNaN(refMinParsed) ? null : refMinParsed,
-      refMax: isNaN(refMaxParsed) ? null : refMaxParsed,
-      data: dataNorm,
-      analise: (analise && analise!=='-') ? analise : ''
-    });
-  });
-  return { ok: ok, errors: errors };
-}
-
-async function addExamesFromPaste(){
-  if(!requireOwner()) return;
-  const textarea = document.getElementById('exame-paste');
-  const text = textarea.value;
-  if(!text.trim()){ alert('Cole o bloco de resultados primeiro.'); return; }
-  const parsed = parseExamPasteText(text);
-  if(!parsed.ok.length){
-    alert('Nenhuma linha valida encontrada. Verifique o formato: Exame | Parametro | Valor | Unidade | Ref.min | Ref.max | Data | Analise (8 colunas, separadas por | ou tabulacao).');
-    return;
-  }
-  const batch = db.batch();
-  parsed.ok.forEach(function(item){
-    const ref = db.collection('exames').doc();
-    batch.set(ref, Object.assign({}, item, {
-      groupId: currentGroupId,
-      criadoPor: auth.currentUser ? auth.currentUser.email : null,
-      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
-    }));
-  });
-  await batch.commit();
-  textarea.value = '';
-  let msg = parsed.ok.length+' registro(s) adicionado(s).';
-  if(parsed.errors.length){
-    msg += '\n\n'+parsed.errors.length+' linha(s) ignorada(s):\n'+parsed.errors.map(function(e){ return 'Linha '+e.line+': '+e.reason; }).join('\n');
-  }
-  alert(msg);
-}
-
-async function saveExameManual(){
-  if(!requireOwner()) return;
-  const exame = document.getElementById('f-ex-exame').value.trim();
-  const parametro = document.getElementById('f-ex-param').value.trim();
-  const valor = parseFloat(document.getElementById('f-ex-valor').value);
-  const unidade = document.getElementById('f-ex-unidade').value.trim();
-  const refMinRaw = document.getElementById('f-ex-refmin').value;
-  const refMaxRaw = document.getElementById('f-ex-refmax').value;
-  const data = document.getElementById('f-ex-data').value;
-  const analise = document.getElementById('f-ex-analise').value.trim();
-  if(!exame || !parametro || isNaN(valor) || !data){
-    alert('Preencha ao menos exame, parametro, valor e data.');
-    return;
-  }
-  const payload = {
-    exame: exame, parametro: parametro, valor: valor,
-    unidade: unidade, data: data, analise: analise,
-    refMin: refMinRaw!=='' ? parseFloat(refMinRaw) : null,
-    refMax: refMaxRaw!=='' ? parseFloat(refMaxRaw) : null,
-    groupId: currentGroupId,
-    criadoPor: auth.currentUser ? auth.currentUser.email : null,
-    atualizadoEm: firebase.firestore.FieldValue.serverTimestamp()
-  };
-  if(state.exameEditingId){
-    await db.collection('exames').doc(state.exameEditingId).update(payload);
-    state.exameEditingId = null;
-  } else {
-    payload.criadoEm = firebase.firestore.FieldValue.serverTimestamp();
-    await db.collection('exames').add(payload);
-  }
-}
-function editExame(id){ if(!requireOwner()) return; state.exameEditingId = id; render(); window.scrollTo(0,0); }
-function cancelExameEdit(){ state.exameEditingId = null; render(); }
-async function deleteExame(id){
-  if(!requireOwner()) return;
-  if(confirm('Excluir este registro de exame?')){
-    await db.collection('exames').doc(id).delete();
-  }
-}
-function selectExameParam(p){ state.exameParam = p; render(); }
-
-function renderExamesTable(list, canEdit){
-  if(!list.length) return '<p class="empty">Nenhum exame registrado ainda.</p>';
-  return '<div style="overflow-x:auto"><table><thead><tr>'+
-    '<th>Data</th><th>Exame</th><th>Parametro</th><th>Valor</th><th>Unidade</th><th>Faixa ref.</th><th>Status</th><th>Analise</th>'+(canEdit?'<th></th>':'')+
-  '</tr></thead><tbody>'+
-    list.map(function(e){
-      const status = classifyExameStatus(e.valor, e.refMin, e.refMax);
-      const faixa = (e.refMin!=null || e.refMax!=null) ? ((e.refMin!=null?e.refMin:'?')+' - '+(e.refMax!=null?e.refMax:'?')) : '-';
-      return '<tr>'+
-        '<td>'+formatDateBR(e.data)+'</td>'+
-        '<td>'+escAttr(e.exame)+'</td>'+
-        '<td>'+escAttr(e.parametro)+'</td>'+
-        '<td>'+e.valor+'</td>'+
-        '<td>'+escAttr(e.unidade||'-')+'</td>'+
-        '<td>'+faixa+'</td>'+
-        '<td>'+(status.label!=='-' ? '<span class="badge" style="background:'+status.color+'">'+status.label+'</span>' : '-')+'</td>'+
-        '<td>'+escAttr(e.analise||'')+'</td>'+
-        (canEdit ? '<td class="actions"><button onclick="editExame(\''+e.id+'\')">Editar</button><button class="danger" onclick="deleteExame(\''+e.id+'\')">Excluir</button></td>' : '')+
-      '</tr>';
-    }).join('')+
-  '</tbody></table></div>';
-}
-
-function drawExameParamChart(paramName){
-  const canvas = document.getElementById('chart-exame-param'); if(!canvas) return;
-  const list = exames.filter(function(e){ return e.parametro===paramName; }).slice().sort(function(a,b){ return a.data.localeCompare(b.data); });
-  const labels = list.map(function(e){ return formatDateBR(e.data); });
-  const series = [{ label: paramName, color:'#1F6F63', data: list.map(function(e){ return e.valor; }) }];
-  const refMins = list.map(function(e){ return e.refMin; });
-  const refMaxs = list.map(function(e){ return e.refMax; });
-  const sameMin = refMins.length && refMins.every(function(v){ return v===refMins[0]; }) && refMins[0]!=null;
-  const sameMax = refMaxs.length && refMaxs.every(function(v){ return v===refMaxs[0]; }) && refMaxs[0]!=null;
-  if(sameMin) series.push({ label:'Ref. minima', color:'#B98A2E', data: list.map(function(){ return refMins[0]; }) });
-  if(sameMax) series.push({ label:'Ref. maxima', color:'#B98A2E', data: list.map(function(){ return refMaxs[0]; }) });
-  drawLineChart(canvas, series, labels);
-}
-
-function renderExames(){
-  const canEdit = myRole === 'owner';
-  const editing = state.exameEditingId ? exames.find(function(e){ return e.id===state.exameEditingId; }) : null;
-  const params = Array.from(new Set(exames.map(function(e){ return e.parametro; }))).sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-  if(!state.exameParam && params.length) state.exameParam = params[0];
-  if(state.exameParam && params.indexOf(state.exameParam)===-1) state.exameParam = params.length ? params[0] : null;
-  const sorted = exames.slice().sort(function(a,b){ return (b.data+(b.parametro||'')).localeCompare(a.data+(a.parametro||'')); });
-
-  let html = '';
-
-  if(canEdit){
-    html += '<div class="panel">'+
-      '<h2>Colar resultados de um laudo</h2>'+
-      '<p style="font-size:13px;color:var(--muted);margin:0 0 10px;">Peca pro Claude reduzir o laudo numa tabela com as colunas: Exame | Parametro | Valor | Unidade | Ref. minima | Ref. maxima | Data | Analise (uma linha por parametro medido, use "-" onde nao houver valor). Cole o bloco abaixo.</p>'+
-      '<textarea id="exame-paste" rows="6" style="width:100%;font-family:monospace;font-size:12.5px;padding:8px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box;" placeholder="Hemograma completo | Hemoglobina | 11.2 | g/dL | 12.0 | 15.5 | 15/03/2026 | -"></textarea>'+
-      '<div class="row" style="margin-top:10px;"><button class="btn" onclick="addExamesFromPaste()">Adicionar registros colados</button></div>'+
-    '</div>';
-
-    html += '<div class="panel">'+
-      '<h2>'+(editing ? 'Editar registro de exame' : 'Adicionar um registro manualmente')+'</h2>'+
-      '<div class="row">'+
-        '<div class="field"><label>Exame</label><input id="f-ex-exame" value="'+(editing?escAttr(editing.exame):'')+'" placeholder="ex: Hemograma completo"></div>'+
-        '<div class="field"><label>Parametro</label><input id="f-ex-param" value="'+(editing?escAttr(editing.parametro):'')+'" placeholder="ex: Hemoglobina"></div>'+
-        '<div class="field"><label>Valor</label><input type="number" step="any" id="f-ex-valor" value="'+(editing?editing.valor:'')+'" placeholder="ex: 11.2"></div>'+
-        '<div class="field"><label>Unidade</label><input id="f-ex-unidade" value="'+(editing?escAttr(editing.unidade||''):'')+'" placeholder="ex: g/dL"></div>'+
-        '<div class="field"><label>Ref. minima</label><input type="number" step="any" id="f-ex-refmin" value="'+(editing && editing.refMin!=null ? editing.refMin : '')+'"></div>'+
-        '<div class="field"><label>Ref. maxima</label><input type="number" step="any" id="f-ex-refmax" value="'+(editing && editing.refMax!=null ? editing.refMax : '')+'"></div>'+
-        '<div class="field"><label>Data</label><input type="date" id="f-ex-data" value="'+(editing?editing.data:todayStr())+'"></div>'+
-      '</div>'+
-      '<div class="field" style="margin-top:10px;"><label>Analise / observacao (opcional)</label><input id="f-ex-analise" style="width:100%;box-sizing:border-box;" value="'+(editing?escAttr(editing.analise||''):'')+'" placeholder="ex: medico pediu repetir em 30 dias"></div>'+
-      '<div class="row" style="margin-top:10px;">'+
-        '<button class="btn" onclick="saveExameManual()">'+(editing?'Salvar alteracoes':'Adicionar registro')+'</button>'+
-        (editing ? '<button class="btn secondary" onclick="cancelExameEdit()">Cancelar</button>' : '')+
-      '</div>'+
-    '</div>';
-  }
-
-  if(params.length){
-    html += '<div class="panel">'+
-      '<h2>Evolucao por parametro</h2>'+
-      '<div class="field" style="max-width:320px;margin-bottom:12px;"><label>Parametro</label><select onchange="selectExameParam(this.value)">'+
-        params.map(function(p){ return '<option value="'+escAttr(p)+'" '+(p===state.exameParam?'selected':'')+'>'+p+'</option>'; }).join('')+
-      '</select></div>'+
-      '<canvas id="chart-exame-param"></canvas>'+
-    '</div>';
-  }
-
-  html += '<div class="panel"><h2>Todos os registros de exames ('+exames.length+')</h2>'+renderExamesTable(sorted, canEdit)+'</div>';
-
-  document.getElementById('main').innerHTML = html;
-  if(state.exameParam) drawExameParamChart(state.exameParam);
 }
 </script>
 </body>
